@@ -108,16 +108,90 @@
   .addcat { display: flex; gap: 8px; margin-top: 12px; }
   .addcat input[type=text] { flex: 1; }
   .addcat input[type=color] { width: 44px; }
+
+  /* View toggle in the toolbar */
+  #viewToggle { display: inline-flex; border: 1px solid #0006; border-radius: 8px; overflow: hidden; }
+  #viewToggle button { border: none; border-radius: 0; background: var(--panel-2); padding: 8px 12px; }
+  #viewToggle button.active { background: var(--accent); color: #fff; }
+  .timeline-only, .calendar-only { display: inline-flex; }
+  body.calendar .timeline-only { display: none; }
+  body:not(.calendar) .calendar-only { display: none; }
+
+  /* Calendar section */
+  #calendar { position: fixed; inset: 60px 0 0 0; display: none; flex-direction: column;
+    background: var(--bg); }
+  body.calendar #calendar { display: flex; }
+  body.calendar #viewport { display: none; }
+  #calbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #0007;
+    flex-wrap: wrap; }
+  #calbar .period { font-weight: 600; font-size: 15px; margin: 0 4px; min-width: 150px; }
+  #calbar .spacer { flex: 1; }
+  #calModeToggle { display: inline-flex; border: 1px solid #0006; border-radius: 8px; overflow: hidden; }
+  #calModeToggle button { border: none; border-radius: 0; background: var(--panel-2); padding: 8px 12px; }
+  #calModeToggle button.active { background: var(--accent); color: #fff; }
+  #calbody { flex: 1; overflow: auto; position: relative; }
+
+  /* Month grid */
+  .cal-weekhead { display: grid; grid-template-columns: repeat(7, 1fr); position: sticky; top: 0; z-index: 2;
+    background: var(--panel); border-bottom: 1px solid #0007; }
+  .cal-weekhead div { padding: 6px 8px; font-size: 12px; color: var(--muted); font-weight: 600; text-align: center; }
+  .cal-month { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(96px, 1fr); }
+  .cal-day { border-right: 1px solid #0005; border-bottom: 1px solid #0005; padding: 4px; min-height: 96px;
+    overflow: hidden; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+  .cal-day:hover { background: var(--panel-2); }
+  .cal-day.othermonth { opacity: .4; }
+  .cal-day.past { filter: grayscale(1) brightness(.78); }
+  .cal-day.today .cal-daynum { background: var(--accent); color: #fff; border-radius: 50%;
+    width: 22px; height: 22px; display: grid; place-items: center; }
+  .cal-daynum { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .cal-chip { font-size: 11px; line-height: 1.3; padding: 1px 5px; border-radius: 4px; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid var(--accent); }
+  .cal-chip:hover { filter: brightness(1.15); }
+  .cal-chip.period { border-left: none; color: #fff; }
+  .cal-more { font-size: 10px; color: var(--muted); padding: 0 4px; }
+
+  /* Week view */
+  .cal-week { display: grid; grid-template-columns: 54px repeat(7, 1fr); min-height: 100%; }
+  .cal-week-head { display: grid; grid-template-columns: 54px repeat(7, 1fr); position: sticky; top: 0; z-index: 3;
+    background: var(--panel); border-bottom: 1px solid #0007; }
+  .cal-week-head .wh { padding: 6px 4px; text-align: center; font-size: 12px; color: var(--muted); font-weight: 600;
+    border-right: 1px solid #0005; }
+  .cal-week-head .wh.today { color: var(--text); }
+  .cal-week-head .wh.today .wd { background: var(--accent); color: #fff; border-radius: 10px; padding: 0 6px; display: inline-block; }
+  .cal-week-allday { display: grid; grid-template-columns: 54px repeat(7, 1fr); border-bottom: 1px solid #0007;
+    background: var(--panel-2); }
+  .cal-week-allday .ad-label { font-size: 10px; color: var(--muted); padding: 4px; border-right: 1px solid #0005; }
+  .cal-week-allday .ad-col { padding: 3px; border-right: 1px solid #0005; display: flex; flex-direction: column; gap: 2px; min-height: 20px; }
+  .cal-week-allday .ad-col.past { filter: grayscale(1) brightness(.78); }
+  .cal-hours { position: relative; }
+  .cal-hourrow { display: grid; grid-template-columns: 54px repeat(7, 1fr); height: 44px; }
+  .cal-hourrow .hr-label { font-size: 11px; color: var(--muted); padding: 0 6px; text-align: right;
+    border-right: 1px solid #0005; transform: translateY(-7px); }
+  .cal-hourrow .hr-cell { border-right: 1px solid #0005; border-top: 1px solid #0004; cursor: pointer; }
+  .cal-hourrow .hr-cell:hover { background: var(--panel-2); }
+  .cal-weekcols { position: absolute; left: 54px; right: 0; top: 0; bottom: 0; display: grid; grid-template-columns: repeat(7, 1fr);
+    pointer-events: none; }
+  .cal-weekcol { position: relative; pointer-events: none; }
+  .cal-task { position: absolute; left: 2px; right: 2px; border-radius: 5px; padding: 2px 5px; font-size: 11px;
+    overflow: hidden; color: #fff; cursor: pointer; pointer-events: auto; border: 1px solid #ffffff22; box-shadow: 0 2px 6px #0006; }
+  .cal-task .tt { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-task.past { filter: grayscale(1) brightness(.78); }
+  .cal-empty { color: var(--muted); padding: 24px; text-align: center; }
 </style>
 </head>
 <body>
   <div id="toolbar">
     <span class="title">Timeline</span>
-    <button id="addEvent" class="primary">+ Event</button>
-    <button id="addRange">+ Range</button>
+    <span id="viewToggle">
+      <button id="vt_timeline" class="active">Timeline</button>
+      <button id="vt_calendar">Calendar</button>
+    </span>
+    <button id="addEvent" class="primary timeline-only">+ Event</button>
+    <button id="addRange" class="timeline-only">+ Range</button>
+    <button id="calAdd" class="primary calendar-only">+ Add</button>
     <button id="manageCats">Categories</button>
     <span class="spacer"></span>
-    <span class="hint" id="hint">drag empty space to pan · scroll / pinch to zoom</span>
+    <span class="hint timeline-only" id="hint">drag empty space to pan · scroll / pinch to zoom</span>
     <button id="menuBtn" class="icon" title="Settings" aria-label="Settings">⋯</button>
   </div>
 
@@ -133,6 +207,21 @@
       <svg class="layer" id="edgeLayer"></svg>
       <div id="nodes"></div>
     </div>
+  </div>
+
+  <div id="calendar">
+    <div id="calbar">
+      <button id="cal_prev" class="icon" title="Previous">‹</button>
+      <button id="cal_today">Today</button>
+      <button id="cal_next" class="icon" title="Next">›</button>
+      <span class="period" id="cal_period"></span>
+      <span class="spacer"></span>
+      <span id="calModeToggle">
+        <button id="cm_month" class="active">Month</button>
+        <button id="cm_week">Week</button>
+      </span>
+    </div>
+    <div id="calbody"></div>
   </div>
 
   <div id="scrim">
@@ -200,10 +289,100 @@ function dateToX(iso) {
 }
 const axisEndX = () => state.monthCount * MONTH_W;
 
+/* ---- recurrence engine (inlined verbatim from recurrence.mjs; do NOT change logic) ----
+   index.html already defines parseISO/toISO/daysInMonth/startOfDay identically, so only
+   durationDays/occurrencesBetween/expandItem are inlined here to keep one deployable file. */
+
+// For a period item (start/end), recurrence shifts the START; the END keeps the
+// same duration (in days) as the base occurrence.
+function durationDays(startISO, endISO) {
+  if (!endISO) return 0;
+  return Math.round((parseISO(endISO) - parseISO(startISO)) / 86400000);
+}
+
+// Generate occurrence start-dates (ISO strings) for one item within [fromISO, toISO].
+function occurrencesBetween(item, fromISO, toISO_) {
+  const rule = item.repeat || 'none';
+  const base = parseISO(item.date || item.startDate);
+  const from = parseISO(fromISO), to = parseISO(toISO_);
+  const out = [];
+
+  if (rule === 'none') {
+    if (base >= from && base <= to) out.push(toISO(base));
+    return out;
+  }
+
+  if (rule === 'weekly') {
+    // first occurrence on/after `from` that is congruent to base mod 7 days
+    let d = new Date(base);
+    if (d < from) {
+      const diff = Math.ceil((from - d) / 86400000 / 7);
+      d = new Date(base); d.setDate(d.getDate() + diff * 7);
+    }
+    for (; d <= to; d.setDate(d.getDate() + 7)) if (d >= base) out.push(toISO(startOfDay(d)));
+    return out;
+  }
+
+  if (rule === 'monthly') {
+    const dom = base.getDate();
+    // iterate month by month from max(base month, from month)
+    let y = Math.max(base.getFullYear(), from.getFullYear());
+    let m = (y === base.getFullYear()) ? base.getMonth() : 0;
+    if (y === from.getFullYear() && from.getMonth() > m) m = from.getMonth();
+    let cur = new Date(y, m, 1);
+    const baseMonthStart = new Date(base.getFullYear(), base.getMonth(), 1);
+    if (cur < baseMonthStart) cur = baseMonthStart;
+    for (; cur <= to; cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1)) {
+      const clampedDay = Math.min(dom, daysInMonth(cur.getFullYear(), cur.getMonth()));
+      const occ = new Date(cur.getFullYear(), cur.getMonth(), clampedDay);
+      if (occ >= base && occ >= from && occ <= to) out.push(toISO(occ));
+    }
+    return out;
+  }
+
+  if (rule === 'yearly') {
+    const mo = base.getMonth(), dom = base.getDate();
+    for (let y = Math.max(base.getFullYear(), from.getFullYear()); ; y++) {
+      const clampedDay = Math.min(dom, daysInMonth(y, mo));
+      const occ = new Date(y, mo, clampedDay);
+      if (occ > to) break;
+      if (occ >= base && occ >= from) out.push(toISO(occ));
+    }
+    return out;
+  }
+
+  return out;
+}
+
+// Expand an item into concrete occurrences (with start/end ISO for periods).
+function expandItem(item, fromISO, toISO_) {
+  const dur = durationDays(item.date || item.startDate, item.endDate);
+  return occurrencesBetween(item, fromISO, toISO_).map(startISO => {
+    const start = parseISO(startISO);
+    const end = new Date(start); end.setDate(end.getDate() + dur);
+    return { ...item, _occStart: startISO, _occEnd: toISO(end) };
+  });
+}
+
+/* ---- axis / calendar date spans ---- */
+// ISO span covered by the currently-added timeline months (Nov 2026 .. end of last month)
+function axisDateSpan() {
+  const first = monthOfIndex(0);
+  const last = monthOfIndex(state.monthCount - 1);
+  return {
+    from: toISO(new Date(first.year, first.month, 1)),
+    to: toISO(new Date(last.year, last.month, daysInMonth(last.year, last.month))),
+  };
+}
+// Calendar horizon: current month .. 31 Dec 2028 (navigation clamps to this range).
+const CAL_HORIZON_END = new Date(2028, 11, 31);
+function calMinMonth() { return new Date(TODAY.getFullYear(), TODAY.getMonth(), 1); }
+function calMaxMonth() { return new Date(CAL_HORIZON_END.getFullYear(), CAL_HORIZON_END.getMonth(), 1); }
+
 /* ---- state + persistence (IndexedDB) ---- */
 const DB_NAME = 'timeline-app', STORE = 'kv', KEY = 'state';
 function freshState() {
-  return { monthCount: 5, categories: DEFAULT_CATEGORIES.map(c => ({ ...c })), events: [], ranges: [] };
+  return { monthCount: 5, categories: DEFAULT_CATEGORIES.map(c => ({ ...c })), events: [], ranges: [], tasks: [] };
 }
 let state = freshState();
 
@@ -224,6 +403,16 @@ async function loadState() {
     });
     if (v) { state = v; if (!state.categories) state.categories = DEFAULT_CATEGORIES.map(c => ({ ...c })); }
   } catch (e) { console.warn('load failed', e); }
+  migrateState();
+}
+// backfill newer fields onto any previously-saved state (graceful migration)
+function migrateState() {
+  if (!Array.isArray(state.events)) state.events = [];
+  if (!Array.isArray(state.ranges)) state.ranges = [];
+  if (!Array.isArray(state.tasks)) state.tasks = [];
+  for (const e of state.events) if (e.repeat == null) e.repeat = 'none';
+  for (const r of state.ranges) if (r.repeat == null) r.repeat = 'none';
+  for (const t of state.tasks) if (t.repeat == null) t.repeat = 'none';
 }
 let saveTimer = null;
 function save() {
@@ -303,9 +492,21 @@ function renderAxis() {
   }
 }
 
+/* Expand ranges into axis-visible occurrences. Each occurrence carries the ORIGINAL
+   range `r` (so edit/delete affect the whole series) plus its occurrence start/end. */
+function timelineRangeOccurrences() {
+  const { from, to } = axisDateSpan();
+  const out = [];
+  for (const r of state.ranges) {
+    if ((r.repeat || 'none') === 'none') { out.push({ r, start: r.startDate, end: r.endDate }); continue; }
+    for (const occ of expandItem(r, from, to)) out.push({ r, start: occ._occStart, end: occ._occEnd });
+  }
+  return out;
+}
+
 /* overlap stacking for ranges: greedy slot assignment within the band */
-function assignRangeSlots(ranges) {
-  const items = ranges.map(r => ({ r, a: dateToX(r.startDate), b: dateToX(r.endDate) }))
+function assignRangeSlots(occs) {
+  const items = occs.map(o => ({ r: o.r, start: o.start, end: o.end, a: dateToX(o.start), b: dateToX(o.end) }))
                       .filter(o => o.a !== null && o.b !== null)
                       .sort((p,q) => p.a - q.a);
   const slotEnds = [];
@@ -319,13 +520,13 @@ function assignRangeSlots(ranges) {
 
 function renderRanges() {
   [...nodes.querySelectorAll('.range')].forEach(n => n.remove());
-  const { items, maxSlots } = assignRangeSlots(state.ranges);
+  const { items, maxSlots } = assignRangeSlots(timelineRangeOccurrences());
   const h = Math.max(16, Math.min(BLOCK_H * 0.5, (BLOCK_H - 8) / maxSlots));
-  items.forEach(({ r, a, b, slot }) => {
+  items.forEach(({ r, start, end, a, b, slot }) => {
     const cat = catById(r.categoryId);
     const el = document.createElement('div');
     el.className = 'range';
-    const past = parseISO(r.endDate) < TODAY; // grayed only when ENTIRELY past
+    const past = parseISO(end) < TODAY; // grayed only when ENTIRELY past
     if (past) el.classList.add('past');
     el.style.left = Math.min(a,b) + 'px';
     el.style.width = Math.max(6, Math.abs(b - a)) + 'px';
@@ -333,8 +534,9 @@ function renderRanges() {
     el.style.height = h + 'px';
     el.style.background = hexToRgba(cat.color, 0.22);
     el.style.borderColor = hexToRgba(cat.color, 0.5);
-    el.innerHTML = `<div class="rh">${escapeHtml(r.header)}</div>`;
-    el.title = `${r.header}\n${fmtDMY(r.startDate)} → ${fmtDMY(r.endDate)}`;
+    const rep = (r.repeat && r.repeat !== 'none') ? ' ↻' : '';
+    el.innerHTML = `<div class="rh">${escapeHtml(r.header)}${rep}</div>`;
+    el.title = `${r.header}\n${fmtDMY(start)} → ${fmtDMY(end)}`;
     el.onclick = e => { e.stopPropagation(); openEditRange(r); };
     nodes.appendChild(el);
   });
@@ -343,38 +545,68 @@ function renderRanges() {
 function renderEvents() {
   [...nodes.querySelectorAll('.card')].forEach(n => n.remove());
   edgeLayer.innerHTML = '';
+  const { from, to } = axisDateSpan();
   for (const ev of state.events) {
     const cat = catById(ev.categoryId);
-    const ax = dateToX(ev.date);
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.style.left = ev.x + 'px';
-    card.style.top = ev.y + 'px';
-    card.style.borderLeftColor = cat.color;
-    const past = parseISO(ev.date) < TODAY;
-    if (past) card.classList.add('past');
-    const expanded = !!ev._open;
-    card.innerHTML = `
-      <div class="hdr"><span class="dot" style="background:${cat.color}"></span>${escapeHtml(ev.header)}</div>
-      <div class="date">${fmtDMY(ev.date)} · ${escapeHtml(cat.name)}</div>
-      ${expanded ? `<div class="body">${escapeHtml(ev.text || '(no notes)')}</div>
-        <div class="row"><button data-edit>Edit</button><button data-del class="danger">Delete</button></div>` : ''}`;
-    if (ax !== null) {
-      const cx = ev.x + 16, cy = ev.y + 10;
-      edgeLayer.appendChild(line(ax, AXIS_Y, cx, cy, past ? '#6b7483' : cat.color, 1.5, '4 3'));
-      const anchor = document.createElementNS(svgNS,'circle');
-      anchor.setAttribute('cx', ax); anchor.setAttribute('cy', AXIS_Y);
-      anchor.setAttribute('r', 3.5); anchor.setAttribute('fill', past ? '#6b7483' : cat.color);
-      edgeLayer.appendChild(anchor);
+    // the base card (draggable, positioned by x,y)
+    drawEventCard(ev, ev.date, ev.x, ev.y, cat, true);
+    // extra occurrences for repeating events: non-draggable markers near their axis date
+    if ((ev.repeat || 'none') !== 'none') {
+      let i = 0;
+      for (const iso of occurrencesBetween(ev, from, to)) {
+        if (iso === ev.date) continue; // base already drawn
+        const ax = dateToX(iso);
+        if (ax === null) continue;
+        const ox = ax + 12, oy = AXIS_Y + 70 + ((i++ % 3) * 46);
+        drawEventCard(ev, iso, ox, oy, cat, false);
+      }
     }
-    makeDraggable(card, ev);
-    card.querySelector('[data-edit]')?.addEventListener('click', e => { e.stopPropagation(); openEditEvent(ev); });
-    card.querySelector('[data-del]')?.addEventListener('click', e => { e.stopPropagation(); confirmDelete('event', ev); });
-    nodes.appendChild(card);
   }
 }
 
-function renderAll() { renderAxis(); renderRanges(); renderEvents(); applyView(); }
+/* Draw one event card. `isBase` -> draggable + expandable; otherwise a compact
+   non-draggable occurrence marker that opens the (whole-series) edit on click. */
+function drawEventCard(ev, iso, x, y, cat, isBase) {
+  const ax = dateToX(iso);
+  const past = parseISO(iso) < TODAY;
+  const repMark = (ev.repeat && ev.repeat !== 'none') ? ' ↻' : '';
+  const card = document.createElement('div');
+  card.className = 'card';
+  if (!isBase) card.style.width = '150px';
+  card.style.left = x + 'px';
+  card.style.top = y + 'px';
+  card.style.borderLeftColor = cat.color;
+  if (past) card.classList.add('past');
+  const expanded = isBase && !!ev._open;
+  card.innerHTML = `
+    <div class="hdr"><span class="dot" style="background:${cat.color}"></span>${escapeHtml(ev.header)}${repMark}</div>
+    <div class="date">${fmtDMY(iso)} · ${escapeHtml(cat.name)}</div>
+    ${expanded ? `<div class="body">${escapeHtml(ev.text || '(no notes)')}</div>
+      <div class="row"><button data-edit>Edit</button><button data-del class="danger">Delete</button></div>` : ''}`;
+  if (ax !== null) {
+    const cx = x + 16, cy = y + 10;
+    edgeLayer.appendChild(line(ax, AXIS_Y, cx, cy, past ? '#6b7483' : cat.color, 1.5, '4 3'));
+    const anchor = document.createElementNS(svgNS,'circle');
+    anchor.setAttribute('cx', ax); anchor.setAttribute('cy', AXIS_Y);
+    anchor.setAttribute('r', 3.5); anchor.setAttribute('fill', past ? '#6b7483' : cat.color);
+    edgeLayer.appendChild(anchor);
+  }
+  if (isBase) {
+    makeDraggable(card, ev);
+    card.querySelector('[data-edit]')?.addEventListener('click', e => { e.stopPropagation(); openEditEvent(ev); });
+    card.querySelector('[data-del]')?.addEventListener('click', e => { e.stopPropagation(); confirmDelete('event', ev); });
+  } else {
+    card.style.cursor = 'pointer';
+    card.title = (ev.repeat && ev.repeat !== 'none') ? 'Repeating occurrence — edit affects the whole series' : '';
+    card.addEventListener('click', e => { e.stopPropagation(); openEditEvent(ev); });
+  }
+  nodes.appendChild(card);
+}
+
+function renderAll() {
+  renderAxis(); renderRanges(); renderEvents(); applyView();
+  if (currentView === 'calendar') renderCalendar();
+}
 
 /* ---- dragging a card; click (no drag) toggles expand ---- */
 function makeDraggable(card, ev) {
@@ -469,16 +701,23 @@ function catOptions(sel) {
 }
 function defaultCatId() { return state.categories[0]?.id || UNCATEGORIZED.id; }
 
-function openCreate(kind) {
-  const todayISO = toISO(TODAY);
+function repeatOptions(sel) {
+  const opts = [['none','None'],['weekly','Weekly'],['monthly','Monthly'],['yearly','Yearly']];
+  return opts.map(([v,l]) => `<option value="${v}" ${v===(sel||'none')?'selected':''}>${l}</option>`).join('');
+}
+
+// prefillISO (optional) sets the initial date(s); used when adding from a calendar day
+function openCreate(kind, prefillISO) {
+  const startISO = prefillISO || toISO(TODAY);
   modal.innerHTML = `
     <h3>New ${kind}</h3>
     <label>Header</label><input id="f_header" placeholder="e.g. ML Exam" />
     <label>Category</label><select id="f_cat">${catOptions(defaultCatId())}</select>
     ${kind === 'event'
-      ? `<label>Date (shown as dd/mm/yyyy)</label><input id="f_date" type="date" value="${todayISO}" />`
-      : `<label>Start date</label><input id="f_start" type="date" value="${todayISO}" />
-         <label>End date</label><input id="f_end" type="date" value="${todayISO}" />`}
+      ? `<label>Date (shown as dd/mm/yyyy)</label><input id="f_date" type="date" value="${startISO}" />`
+      : `<label>Start date</label><input id="f_start" type="date" value="${startISO}" />
+         <label>End date</label><input id="f_end" type="date" value="${startISO}" />`}
+    <label>Repeat</label><select id="f_repeat">${repeatOptions('none')}</select>
     <label>Notes</label><textarea id="f_text" placeholder="details…"></textarea>
     <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Create</button></div>`;
   scrim.classList.add('show');
@@ -487,15 +726,17 @@ function openCreate(kind) {
     const header = modal.querySelector('#f_header').value.trim() || 'Untitled';
     const categoryId = modal.querySelector('#f_cat').value;
     const text = modal.querySelector('#f_text').value;
+    const repeat = modal.querySelector('#f_repeat').value;
     if (kind === 'event') {
       const date = modal.querySelector('#f_date').value;
       const ax = dateToX(date);
       const x = (ax ?? 40) + 20, y = AXIS_Y + 60 + Math.random() * 40;
-      state.events.push({ id: uid(), categoryId, header, date, text, x, y, _open: false });
+      state.events.push({ id: uid(), categoryId, header, date, text, repeat, x, y, _open: false });
     } else {
       const startDate = modal.querySelector('#f_start').value;
-      const endDate = modal.querySelector('#f_end').value;
-      state.ranges.push({ id: uid(), categoryId, header, startDate, endDate, text });
+      let endDate = modal.querySelector('#f_end').value;
+      if (endDate < startDate) endDate = startDate;
+      state.ranges.push({ id: uid(), categoryId, header, startDate, endDate, text, repeat });
     }
     save(); renderAll(); closeModal();
   };
@@ -507,6 +748,7 @@ function openEditEvent(ev) {
     <label>Header</label><input id="f_header" value="${escapeAttr(ev.header)}" />
     <label>Category</label><select id="f_cat">${catOptions(ev.categoryId)}</select>
     <label>Date (shown as dd/mm/yyyy)</label><input id="f_date" type="date" value="${ev.date}" />
+    <label>Repeat</label><select id="f_repeat">${repeatOptions(ev.repeat)}</select>
     <label>Notes</label><textarea id="f_text">${escapeHtml(ev.text || '')}</textarea>
     <div class="actions"><button id="f_del" class="danger">Delete</button>
       <button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Save</button></div>`;
@@ -517,6 +759,7 @@ function openEditEvent(ev) {
     ev.header = modal.querySelector('#f_header').value.trim() || 'Untitled';
     ev.categoryId = modal.querySelector('#f_cat').value;
     ev.date = modal.querySelector('#f_date').value;
+    ev.repeat = modal.querySelector('#f_repeat').value;
     ev.text = modal.querySelector('#f_text').value;
     save(); renderAll(); closeModal();
   };
@@ -529,6 +772,7 @@ function openEditRange(r) {
     <label>Category</label><select id="f_cat">${catOptions(r.categoryId)}</select>
     <label>Start date</label><input id="f_start" type="date" value="${r.startDate}" />
     <label>End date</label><input id="f_end" type="date" value="${r.endDate}" />
+    <label>Repeat</label><select id="f_repeat">${repeatOptions(r.repeat)}</select>
     <label>Notes</label><textarea id="f_text">${escapeHtml(r.text || '')}</textarea>
     <div class="actions"><button id="f_del" class="danger">Delete</button>
       <button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Save</button></div>`;
@@ -539,23 +783,121 @@ function openEditRange(r) {
     r.header = modal.querySelector('#f_header').value.trim() || 'Untitled';
     r.categoryId = modal.querySelector('#f_cat').value;
     r.startDate = modal.querySelector('#f_start').value;
-    r.endDate = modal.querySelector('#f_end').value;
+    let endDate = modal.querySelector('#f_end').value;
+    if (endDate < r.startDate) endDate = r.startDate;
+    r.endDate = endDate;
+    r.repeat = modal.querySelector('#f_repeat').value;
     r.text = modal.querySelector('#f_text').value;
     save(); renderAll(); closeModal();
   };
 }
 
+/* ---- tasks (calendar-only) ---- */
+// Lets the calendar "+ Add" action offer an Event, a Range, or a Task.
+function openAddChooser(prefillISO) {
+  modal.innerHTML = `
+    <h3>Add to calendar</h3>
+    <p style="color:var(--muted)">What would you like to add${prefillISO ? ` on ${fmtDMY(prefillISO)}` : ''}?</p>
+    <div class="actions" style="justify-content:stretch;flex-direction:column;align-items:stretch">
+      <button id="a_event" class="primary">Event (single day)</button>
+      <button id="a_range">Period (date range)</button>
+      <button id="a_task">Task (timed, calendar only)</button>
+      <button id="a_cancel">Cancel</button>
+    </div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#a_event').onclick = () => openCreate('event', prefillISO);
+  modal.querySelector('#a_range').onclick = () => openCreate('range', prefillISO);
+  modal.querySelector('#a_task').onclick = () => openCreateTask(prefillISO);
+  modal.querySelector('#a_cancel').onclick = closeModal;
+}
+
+function openCreateTask(prefillISO) {
+  const dateISO = prefillISO || toISO(TODAY);
+  modal.innerHTML = `
+    <h3>New task</h3>
+    <label>Header</label><input id="f_header" placeholder="e.g. Course" />
+    <label>Category</label><select id="f_cat">${catOptions(defaultCatId())}</select>
+    <label>Date (shown as dd/mm/yyyy)</label><input id="f_date" type="date" value="${dateISO}" />
+    <label>Start time</label><input id="f_start" type="time" value="09:00" />
+    <label>End time</label><input id="f_end" type="time" value="10:00" />
+    <label>Repeat</label><select id="f_repeat">${repeatOptions('none')}</select>
+    <label>Notes</label><textarea id="f_text" placeholder="details…"></textarea>
+    <div id="f_err" class="warn" style="display:none"></div>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Create</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => {
+    const startTime = modal.querySelector('#f_start').value;
+    const endTime = modal.querySelector('#f_end').value;
+    if (!startTime || !endTime || endTime < startTime) {
+      const err = modal.querySelector('#f_err');
+      err.textContent = 'End time must be the same as or after the start time.';
+      err.style.display = 'block';
+      return;
+    }
+    state.tasks.push({
+      id: uid(),
+      categoryId: modal.querySelector('#f_cat').value,
+      header: modal.querySelector('#f_header').value.trim() || 'Untitled',
+      date: modal.querySelector('#f_date').value,
+      startTime, endTime,
+      repeat: modal.querySelector('#f_repeat').value,
+      text: modal.querySelector('#f_text').value,
+    });
+    save(); renderCalendar(); closeModal();
+  };
+}
+
+function openEditTask(t) {
+  modal.innerHTML = `
+    <h3>Edit task</h3>
+    <label>Header</label><input id="f_header" value="${escapeAttr(t.header)}" />
+    <label>Category</label><select id="f_cat">${catOptions(t.categoryId)}</select>
+    <label>Date (shown as dd/mm/yyyy)</label><input id="f_date" type="date" value="${t.date}" />
+    <label>Start time</label><input id="f_start" type="time" value="${t.startTime || ''}" />
+    <label>End time</label><input id="f_end" type="time" value="${t.endTime || ''}" />
+    <label>Repeat</label><select id="f_repeat">${repeatOptions(t.repeat)}</select>
+    <label>Notes</label><textarea id="f_text">${escapeHtml(t.text || '')}</textarea>
+    <div id="f_err" class="warn" style="display:none"></div>
+    <div class="actions"><button id="f_del" class="danger">Delete</button>
+      <button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Save</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_del').onclick = () => { closeModal(); confirmDelete('task', t); };
+  modal.querySelector('#f_ok').onclick = () => {
+    const startTime = modal.querySelector('#f_start').value;
+    const endTime = modal.querySelector('#f_end').value;
+    if (!startTime || !endTime || endTime < startTime) {
+      const err = modal.querySelector('#f_err');
+      err.textContent = 'End time must be the same as or after the start time.';
+      err.style.display = 'block';
+      return;
+    }
+    t.header = modal.querySelector('#f_header').value.trim() || 'Untitled';
+    t.categoryId = modal.querySelector('#f_cat').value;
+    t.date = modal.querySelector('#f_date').value;
+    t.startTime = startTime; t.endTime = endTime;
+    t.repeat = modal.querySelector('#f_repeat').value;
+    t.text = modal.querySelector('#f_text').value;
+    save(); renderCalendar(); closeModal();
+  };
+}
+
 function confirmDelete(kind, item) {
+  const repeating = item.repeat && item.repeat !== 'none';
   modal.innerHTML = `
     <h3>Delete ${kind}?</h3>
-    <p style="color:var(--muted)">“${escapeHtml(item.header)}” will be removed. This can't be undone.</p>
+    ${repeating
+      ? `<div class="warn">“${escapeHtml(item.header)}” repeats (${item.repeat}). Deleting removes the <b>entire repeating series</b>. This can't be undone.</div>`
+      : `<p style="color:var(--muted)">“${escapeHtml(item.header)}” will be removed. This can't be undone.</p>`}
     <div class="actions"><button id="f_cancel">Cancel</button>
-      <button id="f_ok" class="danger">Delete</button></div>`;
+      <button id="f_ok" class="danger">${repeating ? 'Delete series' : 'Delete'}</button></div>`;
   scrim.classList.add('show');
   modal.querySelector('#f_cancel').onclick = closeModal;
   modal.querySelector('#f_ok').onclick = () => {
     if (kind === 'event') state.events = state.events.filter(e => e.id !== item.id);
-    else state.ranges = state.ranges.filter(r => r.id !== item.id);
+    else if (kind === 'range') state.ranges = state.ranges.filter(r => r.id !== item.id);
+    else state.tasks = state.tasks.filter(t => t.id !== item.id);
     save(); renderAll(); closeModal();
   };
 }
@@ -624,7 +966,8 @@ function confirmDeleteCategory(id) {
   const cat = state.categories.find(c => c.id === id);
   if (!cat) return;
   const used = state.events.filter(e => e.categoryId === id).length
-    + state.ranges.filter(r => r.categoryId === id).length;
+    + state.ranges.filter(r => r.categoryId === id).length
+    + state.tasks.filter(t => t.categoryId === id).length;
   modal.innerHTML = `
     <h3>Delete category “${escapeHtml(cat.name)}”?</h3>
     ${used ? `<div class="warn">${used} item(s) use this category. They won't be deleted — they'll be moved to <b>Uncategorized</b> (grey).</div>`
@@ -637,9 +980,307 @@ function confirmDeleteCategory(id) {
     // reassign in-use items to Uncategorized (non-blocking)
     state.events.forEach(e => { if (e.categoryId === id) e.categoryId = UNCATEGORIZED.id; });
     state.ranges.forEach(r => { if (r.categoryId === id) r.categoryId = UNCATEGORIZED.id; });
+    state.tasks.forEach(t => { if (t.categoryId === id) t.categoryId = UNCATEGORIZED.id; });
     state.categories = state.categories.filter(c => c.id !== id);
     save(); renderAll(); openCategoryManager();
   };
+}
+
+/* ============================================================================
+   CALENDAR SECTION — month + week views, offline, same IndexedDB arrays.
+   Reads state.events / state.ranges (shared with the timeline) and state.tasks
+   (calendar only). Recurrence is expanded within the visible window.
+============================================================================ */
+let currentView = 'timeline';     // 'timeline' | 'calendar'
+let calMode = 'month';            // 'month' | 'week'
+let calAnchor = startOfDay(new Date()); // a date inside the currently-shown period
+
+const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const CAL_HOUR_START = 6, CAL_HOUR_END = 24; // week-view hour grid
+const calbody = document.getElementById('calbody');
+const calPeriodLabel = document.getElementById('cal_period');
+
+// Monday-based weekday index (Mon=0 .. Sun=6)
+function mondayIndex(dt) { return (dt.getDay() + 6) % 7; }
+function addDays(dt, n) { const d = new Date(dt); d.setDate(d.getDate() + n); return d; }
+function sameDay(a, b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function clampMonthAnchor(dt) {
+  const m = new Date(dt.getFullYear(), dt.getMonth(), 1);
+  if (m < calMinMonth()) return calMinMonth();
+  if (m > calMaxMonth()) return calMaxMonth();
+  return dt;
+}
+function minutesOfTime(hhmm) { const [h,m] = (hhmm||'0:0').split(':').map(Number); return h*60 + (m||0); }
+
+// Collect the visible window [fromISO, toISO] for the current period.
+function calWindow() {
+  if (calMode === 'month') {
+    const y = calAnchor.getFullYear(), m = calAnchor.getMonth();
+    const first = new Date(y, m, 1);
+    const gridStart = addDays(first, -mondayIndex(first));
+    const gridEnd = addDays(gridStart, 41); // 6 weeks
+    return { from: toISO(gridStart), to: toISO(gridEnd), gridStart };
+  } else {
+    const weekStart = addDays(calAnchor, -mondayIndex(calAnchor));
+    const weekEnd = addDays(weekStart, 6);
+    return { from: toISO(weekStart), to: toISO(weekEnd), weekStart };
+  }
+}
+
+// Build a per-ISO-day index of items (events, period occurrences, tasks) in the window.
+// Returns { days: Map<iso, {events:[], periods:[], tasks:[]}>, periodsAll:[] }
+function calItemsInWindow(fromISO, toISO_) {
+  const days = new Map();
+  const dayOf = iso => { if (!days.has(iso)) days.set(iso, { events: [], periods: [], tasks: [] }); return days.get(iso); };
+
+  for (const ev of state.events)
+    for (const iso of occurrencesBetween(ev, fromISO, toISO_))
+      dayOf(iso).events.push({ ref: ev, date: iso });
+
+  const periodsAll = [];
+  for (const r of state.ranges)
+    for (const occ of expandItem(r, fromISO, toISO_)) {
+      const seg = { ref: r, start: occ._occStart, end: occ._occEnd };
+      periodsAll.push(seg);
+      // mark every day the period covers (within window)
+      let d = parseISO(occ._occStart), end = parseISO(occ._occEnd);
+      const winFrom = parseISO(fromISO), winTo = parseISO(toISO_);
+      if (d < winFrom) d = new Date(winFrom);
+      for (; d <= end && d <= winTo; d = addDays(d, 1)) dayOf(toISO(d)).periods.push(seg);
+    }
+
+  for (const t of state.tasks)
+    for (const iso of occurrencesBetween(t, fromISO, toISO_))
+      dayOf(iso).tasks.push({ ref: t, date: iso });
+
+  return { days, periodsAll };
+}
+
+function setView(v) {
+  currentView = v;
+  document.body.classList.toggle('calendar', v === 'calendar');
+  document.getElementById('vt_timeline').classList.toggle('active', v === 'timeline');
+  document.getElementById('vt_calendar').classList.toggle('active', v === 'calendar');
+  if (v === 'calendar') { calAnchor = clampMonthAnchor(calAnchor); renderCalendar(); }
+  else renderAll();
+}
+
+function calShift(dir) {
+  if (calMode === 'month') {
+    const next = new Date(calAnchor.getFullYear(), calAnchor.getMonth() + dir, 1);
+    const clamped = clampMonthAnchor(next);
+    // only move if within horizon
+    if (clamped.getFullYear() === next.getFullYear() && clamped.getMonth() === next.getMonth()) calAnchor = next;
+    else return;
+  } else {
+    const next = addDays(calAnchor, dir * 7);
+    const nextMonth = new Date(next.getFullYear(), next.getMonth(), 1);
+    if (nextMonth < calMinMonth() || nextMonth > calMaxMonth()) return;
+    calAnchor = next;
+  }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  updateCalNav();
+  if (calMode === 'month') renderCalMonth(); else renderCalWeek();
+}
+
+function updateCalNav() {
+  document.getElementById('cm_month').classList.toggle('active', calMode === 'month');
+  document.getElementById('cm_week').classList.toggle('active', calMode === 'week');
+  if (calMode === 'month') {
+    calPeriodLabel.textContent = `${MONTH_NAMES[calAnchor.getMonth()]} ${calAnchor.getFullYear()}`;
+  } else {
+    const ws = addDays(calAnchor, -mondayIndex(calAnchor));
+    const we = addDays(ws, 6);
+    calPeriodLabel.textContent = `${fmtDMY(toISO(ws))} – ${fmtDMY(toISO(we))}`;
+  }
+}
+
+function catChip(ref, labelText, isPeriod) {
+  const cat = catById(ref.categoryId);
+  const chip = document.createElement('div');
+  chip.className = 'cal-chip' + (isPeriod ? ' period' : '');
+  const rep = (ref.repeat && ref.repeat !== 'none') ? ' ↻' : '';
+  chip.textContent = labelText + rep;
+  if (isPeriod) { chip.style.background = hexToRgba(cat.color, 0.85); }
+  else { chip.style.borderLeftColor = cat.color; chip.style.background = hexToRgba(cat.color, 0.18); }
+  chip.title = `${ref.header}${rep}`;
+  return chip;
+}
+
+function openItemEditor(ref) {
+  if (ref.startTime !== undefined) openEditTask(ref);
+  else if (ref.startDate !== undefined) openEditRange(ref);
+  else openEditEvent(ref);
+}
+
+function renderCalMonth() {
+  const { from, to, gridStart } = calWindow();
+  const { days } = calItemsInWindow(from, to);
+  calbody.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'cal-weekhead';
+  for (const w of WEEKDAYS) { const d = document.createElement('div'); d.textContent = w; head.appendChild(d); }
+  calbody.appendChild(head);
+
+  const grid = document.createElement('div');
+  grid.className = 'cal-month';
+  const month = calAnchor.getMonth();
+  for (let i = 0; i < 42; i++) {
+    const day = addDays(gridStart, i);
+    const iso = toISO(day);
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (day.getMonth() !== month) cell.classList.add('othermonth');
+    if (day < TODAY) cell.classList.add('past');
+    if (sameDay(day, TODAY)) cell.classList.add('today');
+    const num = document.createElement('div');
+    num.className = 'cal-daynum'; num.textContent = day.getDate();
+    cell.appendChild(num);
+
+    const bucket = days.get(iso);
+    const chips = [];
+    if (bucket) {
+      for (const p of bucket.periods) chips.push(catChip(p.ref, p.ref.header, true));
+      for (const e of bucket.events) chips.push(catChip(e.ref, e.ref.header, false));
+      for (const t of bucket.tasks) chips.push(catChip(t.ref, `${t.ref.startTime} ${t.ref.header}`, false));
+    }
+    const MAX = 4;
+    chips.slice(0, MAX).forEach((chip, idx) => {
+      const ref = bucketRefAt(bucket, idx);
+      chip.addEventListener('click', e => { e.stopPropagation(); openItemEditor(ref); });
+      cell.appendChild(chip);
+    });
+    if (chips.length > MAX) {
+      const more = document.createElement('div');
+      more.className = 'cal-more'; more.textContent = `+${chips.length - MAX} more`;
+      cell.appendChild(more);
+    }
+    cell.addEventListener('click', () => openAddChooser(iso));
+    grid.appendChild(cell);
+  }
+  calbody.appendChild(grid);
+}
+
+// resolve the ref that corresponds to chip index `idx` in a day's ordered chip list
+function bucketRefAt(bucket, idx) {
+  if (!bucket) return null;
+  const ordered = [
+    ...bucket.periods.map(p => p.ref),
+    ...bucket.events.map(e => e.ref),
+    ...bucket.tasks.map(t => t.ref),
+  ];
+  return ordered[idx];
+}
+
+function renderCalWeek() {
+  const { from, to, weekStart } = calWindow();
+  const { days } = calItemsInWindow(from, to);
+  calbody.innerHTML = '';
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  // header row with weekday + date
+  const head = document.createElement('div');
+  head.className = 'cal-week-head';
+  const corner = document.createElement('div'); corner.className = 'wh'; corner.textContent = '';
+  head.appendChild(corner);
+  weekDates.forEach((d, i) => {
+    const wh = document.createElement('div');
+    wh.className = 'wh' + (sameDay(d, TODAY) ? ' today' : '');
+    wh.innerHTML = `${WEEKDAYS[i]}<br><span class="wd">${d.getDate()}/${String(d.getMonth()+1).padStart(2,'0')}</span>`;
+    head.appendChild(wh);
+  });
+  calbody.appendChild(head);
+
+  // all-day row: events (day) + period occurrences
+  const allday = document.createElement('div');
+  allday.className = 'cal-week-allday';
+  const adLabel = document.createElement('div'); adLabel.className = 'ad-label'; adLabel.textContent = 'All-day';
+  allday.appendChild(adLabel);
+  weekDates.forEach(d => {
+    const col = document.createElement('div');
+    col.className = 'ad-col' + (d < TODAY ? ' past' : '');
+    const bucket = days.get(toISO(d));
+    if (bucket) {
+      for (const p of bucket.periods) {
+        const chip = catChip(p.ref, p.ref.header, true);
+        chip.addEventListener('click', e => { e.stopPropagation(); openItemEditor(p.ref); });
+        col.appendChild(chip);
+      }
+      for (const ev of bucket.events) {
+        const chip = catChip(ev.ref, ev.ref.header, false);
+        chip.addEventListener('click', e => { e.stopPropagation(); openItemEditor(ev.ref); });
+        col.appendChild(chip);
+      }
+    }
+    col.addEventListener('click', () => openAddChooser(toISO(d)));
+    allday.appendChild(col);
+  });
+  calbody.appendChild(allday);
+
+  // hour grid
+  const hours = document.createElement('div');
+  hours.className = 'cal-hours';
+  for (let h = CAL_HOUR_START; h < CAL_HOUR_END; h++) {
+    const row = document.createElement('div');
+    row.className = 'cal-hourrow';
+    const lbl = document.createElement('div');
+    lbl.className = 'hr-label'; lbl.textContent = `${String(h).padStart(2,'0')}:00`;
+    row.appendChild(lbl);
+    weekDates.forEach(d => {
+      const cell = document.createElement('div');
+      cell.className = 'hr-cell';
+      const hh = h;
+      cell.addEventListener('click', () => openCreateTaskAt(toISO(d), hh));
+      row.appendChild(cell);
+    });
+    hours.appendChild(row);
+  }
+  // timed task overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'cal-weekcols';
+  const ROW_H = 44, totalMin = (CAL_HOUR_END - CAL_HOUR_START) * 60;
+  weekDates.forEach(d => {
+    const colWrap = document.createElement('div');
+    colWrap.className = 'cal-weekcol';
+    const bucket = days.get(toISO(d));
+    if (bucket) {
+      for (const tk of bucket.tasks) {
+        const t = tk.ref;
+        const s = Math.max(minutesOfTime(t.startTime), CAL_HOUR_START * 60);
+        const e = Math.min(minutesOfTime(t.endTime), CAL_HOUR_END * 60);
+        if (e <= CAL_HOUR_START * 60 || s >= CAL_HOUR_END * 60) continue;
+        const top = ((s - CAL_HOUR_START * 60) / 60) * ROW_H;
+        const height = Math.max(16, ((e - s) / 60) * ROW_H);
+        const cat = catById(t.categoryId);
+        const box = document.createElement('div');
+        box.className = 'cal-task' + (d < TODAY ? ' past' : '');
+        box.style.top = top + 'px';
+        box.style.height = height + 'px';
+        box.style.background = hexToRgba(cat.color, 0.9);
+        const rep = (t.repeat && t.repeat !== 'none') ? ' ↻' : '';
+        box.innerHTML = `<div class="tt">${escapeHtml(t.startTime)} ${escapeHtml(t.header)}${rep}</div>`;
+        box.title = `${t.header}\n${t.startTime}–${t.endTime}`;
+        box.addEventListener('click', ev => { ev.stopPropagation(); openEditTask(t); });
+        colWrap.appendChild(box);
+      }
+    }
+    overlay.appendChild(colWrap);
+  });
+  hours.appendChild(overlay);
+  calbody.appendChild(hours);
+}
+
+// open the task dialog prefilled with a date and a start hour from the week grid
+function openCreateTaskAt(dateISO, hour) {
+  openCreateTask(dateISO);
+  const s = modal.querySelector('#f_start'), en = modal.querySelector('#f_end');
+  if (s && en) {
+    s.value = `${String(hour).padStart(2,'0')}:00`;
+    en.value = `${String(Math.min(hour + 1, 23)).padStart(2,'0')}:00`;
+  }
 }
 
 /* ---- small utils ---- */
@@ -653,7 +1294,19 @@ function escapeAttr(s='') { return escapeHtml(s); }
 /* ---- toolbar + settings menu ---- */
 document.getElementById('addEvent').onclick = () => openCreate('event');
 document.getElementById('addRange').onclick = () => openCreate('range');
+document.getElementById('calAdd').onclick = () => openAddChooser();
 document.getElementById('manageCats').onclick = () => openCategoryManager();
+
+/* ---- view toggle (Timeline / Calendar) ---- */
+document.getElementById('vt_timeline').onclick = () => setView('timeline');
+document.getElementById('vt_calendar').onclick = () => setView('calendar');
+
+/* ---- calendar navigation ---- */
+document.getElementById('cal_prev').onclick = () => calShift(-1);
+document.getElementById('cal_next').onclick = () => calShift(1);
+document.getElementById('cal_today').onclick = () => { calAnchor = clampMonthAnchor(startOfDay(new Date())); renderCalendar(); };
+document.getElementById('cm_month').onclick = () => { calMode = 'month'; calAnchor = clampMonthAnchor(calAnchor); renderCalendar(); };
+document.getElementById('cm_week').onclick = () => { calMode = 'week'; renderCalendar(); };
 
 const menu = document.getElementById('menu');
 const menuBtn = document.getElementById('menuBtn');
@@ -663,7 +1316,7 @@ document.getElementById('m_fit').onclick = () => { menu.classList.remove('show')
 document.getElementById('m_reset').onclick = () => {
   menu.classList.remove('show');
   modal.innerHTML = `<h3>Reset all data?</h3>
-    <p style="color:var(--muted)">Clears every event, range, category change, and extra month, and restores the sample data.</p>
+    <p style="color:var(--muted)">Clears every event, range, task, category change, and extra month, and restores the sample data.</p>
     <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Reset</button></div>`;
   scrim.classList.add('show');
   modal.querySelector('#f_cancel').onclick = closeModal;
@@ -678,14 +1331,15 @@ window.addEventListener('resize', applyView);
 function seedIfEmpty(force=false) {
   if (!force && (state.events.length || state.ranges.length)) return;
   state.events = [
-    { id: uid(), categoryId: 'c1', header: 'Frist RISE',  date: '2026-11-30', text: 'Application deadline for RISE.', x: 40,  y: 260, _open: false },
-    { id: uid(), categoryId: 'c2', header: 'ML Exam',      date: '2026-12-15', text: 'Machine learning written exam.', x: 360, y: 300, _open: false },
-    { id: uid(), categoryId: 'c3', header: 'DADH Exam',    date: '2027-01-13', text: 'Date to be confirmed.',          x: 740, y: 250, _open: false },
+    { id: uid(), categoryId: 'c1', header: 'Frist RISE',  date: '2026-11-30', text: 'Application deadline for RISE.', repeat: 'none', x: 40,  y: 260, _open: false },
+    { id: uid(), categoryId: 'c2', header: 'ML Exam',      date: '2026-12-15', text: 'Machine learning written exam.', repeat: 'none', x: 360, y: 300, _open: false },
+    { id: uid(), categoryId: 'c3', header: 'DADH Exam',    date: '2027-01-13', text: 'Date to be confirmed.',          repeat: 'none', x: 740, y: 250, _open: false },
   ];
   state.ranges = [
-    { id: uid(), categoryId: 'c4', header: 'Semester break', startDate: '2026-12-20', endDate: '2027-01-10', text: 'Holiday period.' },
-    { id: uid(), categoryId: 'c3', header: 'Exam phase',     startDate: '2027-01-05', endDate: '2027-02-15', text: 'Overlaps the break to show stacking.' },
+    { id: uid(), categoryId: 'c4', header: 'Semester break', startDate: '2026-12-20', endDate: '2027-01-10', text: 'Holiday period.', repeat: 'none' },
+    { id: uid(), categoryId: 'c3', header: 'Exam phase',     startDate: '2027-01-05', endDate: '2027-02-15', text: 'Overlaps the break to show stacking.', repeat: 'none' },
   ];
+  if (!Array.isArray(state.tasks)) state.tasks = [];
 }
 
 /* ---- service worker (offline / installable) ---- */
