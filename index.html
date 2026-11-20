@@ -2,8 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>Timeline — prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#11151c" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Timeline" />
+<title>Timeline</title>
 <style>
   :root {
     --bg: #11151c;
@@ -19,21 +25,32 @@
     font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-user-select: none; user-select: none; }
 
   /* Toolbar */
-  #toolbar { position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 50;
-    display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  #toolbar { position: fixed; top: 0; left: 0; right: 0; min-height: 52px; z-index: 50;
+    display: flex; align-items: center; gap: 8px; padding: max(0px, env(safe-area-inset-top)) 12px 0;
+    padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: 8px;
     background: rgba(27,33,43,.92); backdrop-filter: blur(6px); border-bottom: 1px solid #0007; }
   #toolbar .spacer { flex: 1; }
   #toolbar .title { font-weight: 600; letter-spacing: .3px; margin-right: 8px; }
   #toolbar .hint { color: var(--muted); font-size: 12px; }
+  @media (max-width: 560px) { #toolbar .hint { display: none; } }
   button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #0006;
     border-radius: 8px; padding: 8px 12px; cursor: pointer; }
   button:hover { background: #2b3545; }
   button.primary { background: var(--accent); border-color: transparent; color: #fff; }
   button.primary:hover { filter: brightness(1.08); }
   button.danger { background: #c0392b; border-color: transparent; color: #fff; }
+  button.icon { width: 40px; padding: 8px 0; text-align: center; }
+
+  /* Settings menu */
+  #menu { position: fixed; top: 54px; right: 12px; z-index: 60; background: var(--panel);
+    border: 1px solid #0007; border-radius: 10px; box-shadow: 0 12px 30px #000a; padding: 6px; display: none; min-width: 180px; }
+  #menu.show { display: block; }
+  #menu button { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px; }
+  #menu button:hover { background: var(--panel-2); }
+  #menu .sep { height: 1px; background: #0006; margin: 6px 4px; }
 
   /* Canvas */
-  #viewport { position: fixed; inset: 52px 0 0 0; overflow: hidden; cursor: grab; touch-action: none; }
+  #viewport { position: fixed; inset: 60px 0 0 0; overflow: hidden; cursor: grab; touch-action: none; }
   #viewport.panning { cursor: grabbing; }
   #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 
@@ -55,34 +72,42 @@
 
   /* Range bars */
   .range { position: absolute; border-radius: 6px; padding: 3px 8px; overflow: hidden;
-    font-size: 12px; cursor: grab; border: 1px solid #ffffff22; }
+    font-size: 12px; cursor: pointer; border: 1px solid #ffffff22; }
   .range .rh { font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   .range.past { filter: grayscale(1) brightness(.7); }
 
-  /* Month labels + add button live in world space */
+  /* Month labels + controls live in world space */
   .monthlabel { position: absolute; color: var(--text); font-weight: 600; font-size: 13px;
     transform: translateX(6px); pointer-events: none; }
-  .addmonth { position: absolute; width: 30px; height: 30px; border-radius: 50%; padding: 0;
+  .addmonth, .delmonth { position: absolute; width: 30px; height: 30px; border-radius: 50%; padding: 0;
     font-size: 18px; line-height: 1; display: grid; place-items: center; }
+  .delmonth { font-size: 15px; background: #3a2730; border-color: #0006; color: #e9a8a8; }
+  .delmonth:hover { background: #4a2a30; }
 
   /* Modal */
   #scrim { position: fixed; inset: 0; background: #0008; z-index: 100; display: none; align-items: center; justify-content: center; }
   #scrim.show { display: flex; }
   .modal { background: var(--panel); border: 1px solid #0007; border-radius: 14px; padding: 18px;
-    width: min(420px, 92vw); box-shadow: 0 20px 60px #000a; }
+    width: min(440px, 92vw); max-height: 88vh; overflow: auto; box-shadow: 0 20px 60px #000a; }
   .modal h3 { margin: 0 0 12px; }
   .modal label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
   .modal input, .modal textarea, .modal select { width: 100%; font: inherit; color: var(--text);
     background: var(--panel-2); border: 1px solid #0006; border-radius: 8px; padding: 8px 10px; }
+  .modal input[type=color] { height: 40px; padding: 4px; }
   .modal textarea { resize: vertical; min-height: 70px; }
-  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
-  .modal .seg { display: flex; gap: 6px; margin-bottom: 6px; }
-  .modal .seg button { flex: 1; }
-  .modal .seg button.on { background: var(--accent); border-color: transparent; color: #fff; }
-  #dateFields2 { display: none; }
-  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
-  .swatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
-  .swatch.on { border-color: #fff; }
+  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  .modal .warn { background: #3a2a1f; border: 1px solid #7a5a2a; color: #f0c98a; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+
+  /* Category manager rows */
+  .catrow { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #0005; }
+  .catrow .cname { flex: 1; }
+  .catrow .cdot { width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto; }
+  .catrow input[type=color] { width: 36px; height: 32px; padding: 2px; }
+  .catrow input.rename { flex: 1; }
+  .catrow button { padding: 5px 8px; font-size: 12px; }
+  .addcat { display: flex; gap: 8px; margin-top: 12px; }
+  .addcat input[type=text] { flex: 1; }
+  .addcat input[type=color] { width: 44px; }
 </style>
 </head>
 <body>
@@ -90,9 +115,16 @@
     <span class="title">Timeline</span>
     <button id="addEvent" class="primary">+ Event</button>
     <button id="addRange">+ Range</button>
+    <button id="manageCats">Categories</button>
     <span class="spacer"></span>
     <span class="hint" id="hint">drag empty space to pan · scroll / pinch to zoom</span>
-    <button id="reset">Reset data</button>
+    <button id="menuBtn" class="icon" title="Settings" aria-label="Settings">⋯</button>
+  </div>
+
+  <div id="menu">
+    <button id="m_fit">Fit to start</button>
+    <div class="sep"></div>
+    <button id="m_reset" class="danger" style="color:#ff9a8f">Reset all data…</button>
   </div>
 
   <div id="viewport">
@@ -109,13 +141,12 @@
 
 <script type="module">
 /* ============================================================================
-   Timeline prototype — zero dependencies.
-   Validates the core interaction from the sketch:
-   axis + manually-added months, zoom/pan (min zoom ~2 months), events created
-   by date as draggable cards with a FIXED connector to their axis date,
-   click-to-expand, ranges as low-opacity bars with overlap stacking, category
-   colors, graying-out of past items, and IndexedDB persistence.
-   This is a throwaway UI; the data model/logic transfer to the real React app.
+   Timeline — zero-dependency installable PWA (prototype → app).
+   Axis + manually-added/removable months, zoom/pan (min zoom ~2 months),
+   events as draggable cards with a FIXED connector to their axis date and
+   click-to-expand, ranges as low-opacity bars with overlap stacking,
+   user-managed categories (add / rename / delete w/ non-blocking warning),
+   dd/mm/yyyy display, graying-out of past items, IndexedDB persistence.
 ============================================================================ */
 
 /* ---- constants ---- */
@@ -123,15 +154,21 @@ const FIRST_YEAR = 2026, FIRST_MONTH = 10; // 0-based: 10 = November
 const MONTH_W = 320;        // px width of one month block at zoom=1 (world units)
 const AXIS_Y = 120;         // y of the axis line in world coords
 const BLOCK_H = 150;        // height of the range band below the axis
-const TODAY = new Date(2026, 10, 20); // fixed "today" for the prototype (20 Nov 2026)
+const TODAY = startOfDay(new Date()); // real "today" (graying is live)
+const UNCATEGORIZED = { id: 'uncat', name: 'Uncategorized', color: '#8390a3' };
 
-const CATEGORIES = [
+function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+
+/* ---- default categories (seed only; fully editable afterwards) ---- */
+const DEFAULT_CATEGORIES = [
   { id: 'c1', name: 'Deadline', color: '#e8743b' },
   { id: 'c2', name: 'Exam',     color: '#e74c3c' },
   { id: 'c3', name: 'Admin',    color: '#4f8cff' },
   { id: 'c4', name: 'Personal', color: '#2ecc71' },
 ];
-const catById = id => CATEGORIES.find(c => c.id === id) || CATEGORIES[0];
+function catById(id) {
+  return state.categories.find(c => c.id === id) || UNCATEGORIZED;
+}
 
 /* ---- date helpers ---- */
 const MONTH_NAMES = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
@@ -143,6 +180,12 @@ function monthOfIndex(i) { // i=0 -> Nov 2026
 function parseISO(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
 function toISO(dt) { const p = n => String(n).padStart(2,'0');
   return `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; }
+// display: ISO (yyyy-mm-dd) -> dd/mm/yyyy
+function fmtDMY(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
 // map an ISO date -> world X on the axis (null if outside the added months)
 function dateToX(iso) {
   const dt = parseISO(iso);
@@ -158,8 +201,11 @@ function dateToX(iso) {
 const axisEndX = () => state.monthCount * MONTH_W;
 
 /* ---- state + persistence (IndexedDB) ---- */
-const DB_NAME = 'timeline-proto', STORE = 'kv', KEY = 'state';
-let state = { monthCount: 5, events: [], ranges: [] }; // default: Nov..Mär (5 months)
+const DB_NAME = 'timeline-app', STORE = 'kv', KEY = 'state';
+function freshState() {
+  return { monthCount: 5, categories: DEFAULT_CATEGORIES.map(c => ({ ...c })), events: [], ranges: [] };
+}
+let state = freshState();
 
 function openDB() {
   return new Promise((res, rej) => {
@@ -176,7 +222,7 @@ async function loadState() {
       const tx = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
       tx.onsuccess = () => res(tx.result); tx.onerror = () => rej(tx.error);
     });
-    if (v) state = v;
+    if (v) { state = v; if (!state.categories) state.categories = DEFAULT_CATEGORIES.map(c => ({ ...c })); }
   } catch (e) { console.warn('load failed', e); }
 }
 let saveTimer = null;
@@ -195,13 +241,15 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 const vp = document.getElementById('viewport');
 const world = document.getElementById('world');
 let view = { x: 20, y: 10, k: 1 };
-function minZoom() { // fully zoomed out shows at most ~2 months
-  return vp.clientWidth / (2 * MONTH_W);
-}
+function minZoom() { return vp.clientWidth / (2 * MONTH_W); } // fully out ≈ 2 months
 function clampZoom(k) { return Math.min(2.5, Math.max(minZoom(), k)); }
 function applyView() {
   view.k = clampZoom(view.k);
   world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`;
+}
+function fitToStart() {
+  view.k = clampZoom(minZoom());
+  view.x = 20; view.y = 10; applyView();
 }
 
 /* ---- rendering ---- */
@@ -220,15 +268,12 @@ function line(x1,y1,x2,y2,stroke,w,dash) {
 function renderAxis() {
   axisLayer.innerHTML = '';
   const endX = axisEndX();
-  // main axis line
   axisLayer.appendChild(line(0, AXIS_Y, endX, AXIS_Y, '#cdd6e5', 2));
-  // month ticks + labels + block borders
   for (let i = 0; i <= state.monthCount; i++) {
     const x = i * MONTH_W;
     axisLayer.appendChild(line(x, AXIS_Y - 16, x, AXIS_Y + BLOCK_H, '#5b6677', i === 0 || i === state.monthCount ? 2 : 1));
   }
-  // labels rendered as HTML (nodes layer) so they stay crisp
-  [...nodes.querySelectorAll('.monthlabel,.addmonth')].forEach(n => n.remove());
+  [...nodes.querySelectorAll('.monthlabel,.addmonth,.delmonth')].forEach(n => n.remove());
   for (let i = 0; i < state.monthCount; i++) {
     const { year, month } = monthOfIndex(i);
     const lbl = document.createElement('div');
@@ -238,7 +283,7 @@ function renderAxis() {
     lbl.style.top = (AXIS_Y - 42) + 'px';
     nodes.appendChild(lbl);
   }
-  // "+" add-month button at right end
+  // "+" add next month (right end)
   const add = document.createElement('button');
   add.className = 'addmonth'; add.textContent = '+'; add.title = 'Add next month';
   add.style.left = (endX + 14) + 'px';
@@ -246,35 +291,41 @@ function renderAxis() {
   add.onpointerdown = e => e.stopPropagation();
   add.onclick = () => { state.monthCount++; save(); renderAll(); };
   nodes.appendChild(add);
+  // "−" remove last month (only when more than 1 month, below the + so they don't overlap)
+  if (state.monthCount > 1) {
+    const del = document.createElement('button');
+    del.className = 'delmonth'; del.textContent = '−'; del.title = 'Remove last month';
+    del.style.left = (endX + 14) + 'px';
+    del.style.top = (AXIS_Y + 22) + 'px';
+    del.onpointerdown = e => e.stopPropagation();
+    del.onclick = () => confirmDeleteMonth();
+    nodes.appendChild(del);
+  }
 }
 
 /* overlap stacking for ranges: greedy slot assignment within the band */
 function assignRangeSlots(ranges) {
-  // Only consider ranges with a valid axis position
   const items = ranges.map(r => ({ r, a: dateToX(r.startDate), b: dateToX(r.endDate) }))
                       .filter(o => o.a !== null && o.b !== null)
                       .sort((p,q) => p.a - q.a);
-  const slotEnds = []; // x-end currently occupying each slot
+  const slotEnds = [];
   for (const o of items) {
     let s = slotEnds.findIndex(end => end <= o.a);
     if (s === -1) { s = slotEnds.length; slotEnds.push(o.b); } else slotEnds[s] = o.b;
     o.slot = s;
   }
-  const maxSlots = Math.max(1, slotEnds.length);
-  return { items, maxSlots };
+  return { items, maxSlots: Math.max(1, slotEnds.length) };
 }
 
 function renderRanges() {
   [...nodes.querySelectorAll('.range')].forEach(n => n.remove());
   const { items, maxSlots } = assignRangeSlots(state.ranges);
-  // default single range = half the band; thinner as overlaps grow
-  const perSlot = (BLOCK_H * 0.5) / Math.max(1, Math.ceil(maxSlots / 1));
   const h = Math.max(16, Math.min(BLOCK_H * 0.5, (BLOCK_H - 8) / maxSlots));
   items.forEach(({ r, a, b, slot }) => {
     const cat = catById(r.categoryId);
     const el = document.createElement('div');
     el.className = 'range';
-    const past = parseISO(r.endDate) < TODAY;
+    const past = parseISO(r.endDate) < TODAY; // grayed only when ENTIRELY past
     if (past) el.classList.add('past');
     el.style.left = Math.min(a,b) + 'px';
     el.style.width = Math.max(6, Math.abs(b - a)) + 'px';
@@ -283,7 +334,7 @@ function renderRanges() {
     el.style.background = hexToRgba(cat.color, 0.22);
     el.style.borderColor = hexToRgba(cat.color, 0.5);
     el.innerHTML = `<div class="rh">${escapeHtml(r.header)}</div>`;
-    el.title = `${r.header}\n${r.startDate} → ${r.endDate}`;
+    el.title = `${r.header}\n${fmtDMY(r.startDate)} → ${fmtDMY(r.endDate)}`;
     el.onclick = e => { e.stopPropagation(); openEditRange(r); };
     nodes.appendChild(el);
   });
@@ -305,20 +356,17 @@ function renderEvents() {
     const expanded = !!ev._open;
     card.innerHTML = `
       <div class="hdr"><span class="dot" style="background:${cat.color}"></span>${escapeHtml(ev.header)}</div>
-      <div class="date">${ev.date} · ${escapeHtml(cat.name)}</div>
+      <div class="date">${fmtDMY(ev.date)} · ${escapeHtml(cat.name)}</div>
       ${expanded ? `<div class="body">${escapeHtml(ev.text || '(no notes)')}</div>
         <div class="row"><button data-edit>Edit</button><button data-del class="danger">Delete</button></div>` : ''}`;
-    // connector: FIXED to the axis date (vertical drop line), independent of card drag
     if (ax !== null) {
-      const cx = ev.x + 16, cy = ev.y + 10; // anchor near top-left of card
-      edgeLayer.appendChild(line(ax, AXIS_Y, ax, AXIS_Y, '#93a0b4', 1)); // tick dot base
+      const cx = ev.x + 16, cy = ev.y + 10;
       edgeLayer.appendChild(line(ax, AXIS_Y, cx, cy, past ? '#6b7483' : cat.color, 1.5, '4 3'));
       const anchor = document.createElementNS(svgNS,'circle');
       anchor.setAttribute('cx', ax); anchor.setAttribute('cy', AXIS_Y);
       anchor.setAttribute('r', 3.5); anchor.setAttribute('fill', past ? '#6b7483' : cat.color);
       edgeLayer.appendChild(anchor);
     }
-    // interactions
     makeDraggable(card, ev);
     card.querySelector('[data-edit]')?.addEventListener('click', e => { e.stopPropagation(); openEditEvent(ev); });
     card.querySelector('[data-del]')?.addEventListener('click', e => { e.stopPropagation(); confirmDelete('event', ev); });
@@ -328,7 +376,7 @@ function renderEvents() {
 
 function renderAll() { renderAxis(); renderRanges(); renderEvents(); applyView(); }
 
-/* ---- dragging a card (updates saved position); click (no drag) toggles expand ---- */
+/* ---- dragging a card; click (no drag) toggles expand ---- */
 function makeDraggable(card, ev) {
   let startX, startY, origX, origY, moved;
   card.addEventListener('pointerdown', e => {
@@ -342,9 +390,9 @@ function makeDraggable(card, ev) {
       if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
       ev.x = origX + dx; ev.y = origY + dy;
       card.style.left = ev.x + 'px'; card.style.top = ev.y + 'px';
-      renderEvents(); // redraw connectors live (anchor stays fixed on the axis date)
+      renderEvents();
     };
-    const up = u => {
+    const up = () => {
       card.releasePointerCapture(e.pointerId);
       card.classList.remove('dragging');
       vp.removeEventListener('pointermove', move); vp.removeEventListener('pointerup', up);
@@ -357,7 +405,7 @@ function makeDraggable(card, ev) {
 /* ---- pan & zoom ---- */
 let panning = false, panStart;
 vp.addEventListener('pointerdown', e => {
-  if (e.target.closest('.card, .range, .addmonth, button')) return;
+  if (e.target.closest('.card, .range, .addmonth, .delmonth, button')) return;
   panning = true; vp.classList.add('panning');
   panStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
   vp.setPointerCapture(e.pointerId);
@@ -368,18 +416,47 @@ vp.addEventListener('pointermove', e => {
   view.y = panStart.vy + (e.clientY - panStart.y);
   applyView();
 });
-vp.addEventListener('pointerup', e => { panning = false; vp.classList.remove('panning'); });
+vp.addEventListener('pointerup', () => { panning = false; vp.classList.remove('panning'); });
 vp.addEventListener('wheel', e => {
   e.preventDefault();
   const rect = vp.getBoundingClientRect();
   const mx = e.clientX - rect.left, my = e.clientY - rect.top;
   const prevK = view.k;
   const k = clampZoom(view.k * (e.deltaY < 0 ? 1.1 : 1/1.1));
-  // zoom toward cursor
   view.x = mx - ((mx - view.x) * (k / prevK));
   view.y = my - ((my - view.y) * (k / prevK));
   view.k = k; applyView();
 }, { passive: false });
+
+/* pinch-to-zoom (two-pointer) */
+const pointers = new Map();
+let pinchStart = null;
+vp.addEventListener('pointerdown', e => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    panning = false; vp.classList.remove('panning');
+    const [p1, p2] = [...pointers.values()];
+    pinchStart = { dist: Math.hypot(p1.x-p2.x, p1.y-p2.y), k: view.k,
+      cx: (p1.x+p2.x)/2, cy: (p1.y+p2.y)/2, vx: view.x, vy: view.y };
+  }
+});
+vp.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2 && pinchStart) {
+    const [p1, p2] = [...pointers.values()];
+    const dist = Math.hypot(p1.x-p2.x, p1.y-p2.y);
+    const rect = vp.getBoundingClientRect();
+    const k = clampZoom(pinchStart.k * (dist / pinchStart.dist));
+    const mx = pinchStart.cx - rect.left, my = pinchStart.cy - rect.top;
+    view.x = mx - ((mx - pinchStart.vx) * (k / pinchStart.k));
+    view.y = my - ((my - pinchStart.vy) * (k / pinchStart.k));
+    view.k = k; applyView();
+  }
+});
+function clearPointer(e) { pointers.delete(e.pointerId); if (pointers.size < 2) pinchStart = null; }
+vp.addEventListener('pointerup', clearPointer);
+vp.addEventListener('pointercancel', clearPointer);
 
 /* ---- modals ---- */
 const scrim = document.getElementById('scrim');
@@ -388,17 +465,18 @@ function closeModal() { scrim.classList.remove('show'); modal.innerHTML = ''; }
 scrim.addEventListener('pointerdown', e => { if (e.target === scrim) closeModal(); });
 
 function catOptions(sel) {
-  return CATEGORIES.map(c => `<option value="${c.id}" ${c.id===sel?'selected':''}>${c.name}</option>`).join('');
+  return state.categories.map(c => `<option value="${c.id}" ${c.id===sel?'selected':''}>${escapeHtml(c.name)}</option>`).join('');
 }
+function defaultCatId() { return state.categories[0]?.id || UNCATEGORIZED.id; }
 
-function openCreate(kind) { // 'event' | 'range'
+function openCreate(kind) {
   const todayISO = toISO(TODAY);
   modal.innerHTML = `
     <h3>New ${kind}</h3>
     <label>Header</label><input id="f_header" placeholder="e.g. ML Exam" />
-    <label>Category</label><select id="f_cat">${catOptions('c1')}</select>
+    <label>Category</label><select id="f_cat">${catOptions(defaultCatId())}</select>
     ${kind === 'event'
-      ? `<label>Date</label><input id="f_date" type="date" value="${todayISO}" />`
+      ? `<label>Date (shown as dd/mm/yyyy)</label><input id="f_date" type="date" value="${todayISO}" />`
       : `<label>Start date</label><input id="f_start" type="date" value="${todayISO}" />
          <label>End date</label><input id="f_end" type="date" value="${todayISO}" />`}
     <label>Notes</label><textarea id="f_text" placeholder="details…"></textarea>
@@ -411,7 +489,6 @@ function openCreate(kind) { // 'event' | 'range'
     const text = modal.querySelector('#f_text').value;
     if (kind === 'event') {
       const date = modal.querySelector('#f_date').value;
-      // spawn the card near its axis date so the connector is short
       const ax = dateToX(date);
       const x = (ax ?? 40) + 20, y = AXIS_Y + 60 + Math.random() * 40;
       state.events.push({ id: uid(), categoryId, header, date, text, x, y, _open: false });
@@ -429,7 +506,7 @@ function openEditEvent(ev) {
     <h3>Edit event</h3>
     <label>Header</label><input id="f_header" value="${escapeAttr(ev.header)}" />
     <label>Category</label><select id="f_cat">${catOptions(ev.categoryId)}</select>
-    <label>Date</label><input id="f_date" type="date" value="${ev.date}" />
+    <label>Date (shown as dd/mm/yyyy)</label><input id="f_date" type="date" value="${ev.date}" />
     <label>Notes</label><textarea id="f_text">${escapeHtml(ev.text || '')}</textarea>
     <div class="actions"><button id="f_del" class="danger">Delete</button>
       <button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Save</button></div>`;
@@ -483,31 +560,121 @@ function confirmDelete(kind, item) {
   };
 }
 
+function confirmDeleteMonth() {
+  const { year, month } = monthOfIndex(state.monthCount - 1);
+  const label = `${MONTH_NAMES[month]} ${year}`;
+  // count items that live in this last month (they'd lose their axis position)
+  const start = toISO(new Date(year, month, 1));
+  const end = toISO(new Date(year, month, daysInMonth(year, month)));
+  const inMonth = iso => iso >= start && iso <= end;
+  const affected = state.events.filter(e => inMonth(e.date)).length
+    + state.ranges.filter(r => inMonth(r.startDate) || inMonth(r.endDate)).length;
+  modal.innerHTML = `
+    <h3>Remove last month?</h3>
+    <p style="color:var(--muted)">This removes <b>${label}</b> from the end of the timeline.</p>
+    ${affected ? `<div class="warn">${affected} item(s) fall in this month. They stay saved, but won't show on the axis until you add the month back.</div>` : ''}
+    <div class="actions"><button id="f_cancel">Cancel</button>
+      <button id="f_ok" class="danger">Remove month</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => {
+    if (state.monthCount > 1) state.monthCount--;
+    save(); renderAll(); closeModal();
+  };
+}
+
+/* ---- category manager ---- */
+function openCategoryManager() {
+  const rows = state.categories.map(c => `
+    <div class="catrow" data-id="${c.id}">
+      <input type="color" value="${c.color}" data-color />
+      <input type="text" class="rename" value="${escapeAttr(c.name)}" data-name />
+      <button data-del class="danger" title="Delete">Delete</button>
+    </div>`).join('');
+  modal.innerHTML = `
+    <h3>Categories</h3>
+    <div id="catlist">${rows || '<p style="color:var(--muted)">No categories yet.</p>'}</div>
+    <div class="addcat">
+      <input type="color" id="newColor" value="#9b59b6" />
+      <input type="text" id="newName" placeholder="New category name" />
+      <button id="addBtn" class="primary">Add</button>
+    </div>
+    <div class="actions"><button id="f_done" class="primary">Done</button></div>`;
+  scrim.classList.add('show');
+
+  // live rename + recolor
+  modal.querySelectorAll('.catrow').forEach(row => {
+    const id = row.dataset.id;
+    const cat = () => state.categories.find(c => c.id === id);
+    row.querySelector('[data-name]').oninput = e => { const c = cat(); if (c) { c.name = e.target.value; save(); } };
+    row.querySelector('[data-color]').oninput = e => { const c = cat(); if (c) { c.color = e.target.value; save(); renderAll(); } };
+    row.querySelector('[data-del]').onclick = () => confirmDeleteCategory(id);
+  });
+  modal.querySelector('#addBtn').onclick = () => {
+    const name = modal.querySelector('#newName').value.trim();
+    const color = modal.querySelector('#newColor').value;
+    if (!name) return;
+    state.categories.push({ id: uid(), name, color });
+    save(); renderAll(); openCategoryManager();
+  };
+  modal.querySelector('#f_done').onclick = () => { renderAll(); closeModal(); };
+}
+
+function confirmDeleteCategory(id) {
+  const cat = state.categories.find(c => c.id === id);
+  if (!cat) return;
+  const used = state.events.filter(e => e.categoryId === id).length
+    + state.ranges.filter(r => r.categoryId === id).length;
+  modal.innerHTML = `
+    <h3>Delete category “${escapeHtml(cat.name)}”?</h3>
+    ${used ? `<div class="warn">${used} item(s) use this category. They won't be deleted — they'll be moved to <b>Uncategorized</b> (grey).</div>`
+           : `<p style="color:var(--muted)">No items use this category.</p>`}
+    <div class="actions"><button id="f_cancel">Cancel</button>
+      <button id="f_ok" class="danger">Delete category</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = () => openCategoryManager();
+  modal.querySelector('#f_ok').onclick = () => {
+    // reassign in-use items to Uncategorized (non-blocking)
+    state.events.forEach(e => { if (e.categoryId === id) e.categoryId = UNCATEGORIZED.id; });
+    state.ranges.forEach(r => { if (r.categoryId === id) r.categoryId = UNCATEGORIZED.id; });
+    state.categories = state.categories.filter(c => c.id !== id);
+    save(); renderAll(); openCategoryManager();
+  };
+}
+
 /* ---- small utils ---- */
 function hexToRgba(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
 }
-function escapeHtml(s='') { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(s='') { return escapeHtml(s); }
 
-/* ---- toolbar ---- */
+/* ---- toolbar + settings menu ---- */
 document.getElementById('addEvent').onclick = () => openCreate('event');
 document.getElementById('addRange').onclick = () => openCreate('range');
-document.getElementById('reset').onclick = () => {
+document.getElementById('manageCats').onclick = () => openCategoryManager();
+
+const menu = document.getElementById('menu');
+const menuBtn = document.getElementById('menuBtn');
+menuBtn.onclick = e => { e.stopPropagation(); menu.classList.toggle('show'); };
+document.addEventListener('click', e => { if (!menu.contains(e.target) && e.target !== menuBtn) menu.classList.remove('show'); });
+document.getElementById('m_fit').onclick = () => { menu.classList.remove('show'); fitToStart(); };
+document.getElementById('m_reset').onclick = () => {
+  menu.classList.remove('show');
   modal.innerHTML = `<h3>Reset all data?</h3>
-    <p style="color:var(--muted)">Clears every event, range, and extra month.</p>
+    <p style="color:var(--muted)">Clears every event, range, category change, and extra month, and restores the sample data.</p>
     <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Reset</button></div>`;
   scrim.classList.add('show');
   modal.querySelector('#f_cancel').onclick = closeModal;
   modal.querySelector('#f_ok').onclick = () => {
-    state = { monthCount: 5, events: [], ranges: [] }; seedIfEmpty(true); save(); renderAll(); closeModal();
+    state = freshState(); seedIfEmpty(true); save(); renderAll(); closeModal();
   };
 };
 
 window.addEventListener('resize', applyView);
 
-/* ---- seed sample data (first run only) so there's something to see ---- */
+/* ---- seed sample data (first run only) ---- */
 function seedIfEmpty(force=false) {
   if (!force && (state.events.length || state.ranges.length)) return;
   state.events = [
@@ -521,11 +688,17 @@ function seedIfEmpty(force=false) {
   ];
 }
 
+/* ---- service worker (offline / installable) ---- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register failed', err));
+  });
+}
+
 /* ---- boot ---- */
 (async function main() {
   await loadState();
   seedIfEmpty();
-  // start zoomed out a touch and centered on the first month
   view.k = clampZoom(Math.max(minZoom(), 0.6));
   renderAll();
 })();

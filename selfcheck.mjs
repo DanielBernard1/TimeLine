@@ -81,5 +81,47 @@ const r2 = assignRangeSlots([
 eq('non-overlap maxSlots = 1', r2.maxSlots, 1);
 eq('non-overlap slots = [0,0]', r2.items.map(i => i.slot), [0, 0]);
 
+// --- new logic added in the app round ---
+
+// dd/mm/yyyy display formatting
+function fmtDMY(iso) { if (!iso) return ''; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; }
+eq('fmtDMY Nov 30', fmtDMY('2026-11-30'), '30/11/2026');
+eq('fmtDMY Jan 05', fmtDMY('2027-01-05'), '05/01/2027');
+eq('fmtDMY empty', fmtDMY(''), '');
+
+// category lookup falls back to Uncategorized when id is unknown/deleted
+const UNCATEGORIZED = { id: 'uncat', name: 'Uncategorized', color: '#8390a3' };
+const categories = [{ id: 'c1', name: 'Deadline', color: '#e8743b' }];
+const catById = id => categories.find(c => c.id === id) || UNCATEGORIZED;
+eq('known category resolves', catById('c1').name, 'Deadline');
+eq('deleted category -> Uncategorized', catById('gone').name, 'Uncategorized');
+
+// deleting a category reassigns in-use items to Uncategorized (non-blocking, nothing lost)
+const evs = [{ id: 'e1', categoryId: 'c1' }, { id: 'e2', categoryId: 'c9' }];
+evs.forEach(e => { if (e.categoryId === 'c1') e.categoryId = UNCATEGORIZED.id; });
+eq('reassigned item -> uncat', evs[0].categoryId, 'uncat');
+eq('untouched item kept', evs[1].categoryId, 'c9');
+eq('no items deleted on category delete', evs.length, 2);
+
+// month-delete affected-count: items in the last month are counted (they stay saved)
+function affectedInLastMonth(monthCount, events, ranges) {
+  const { year, month } = monthOfIndex(monthCount - 1);
+  const start = `${year}-${String(month+1).padStart(2,'0')}-01`;
+  const end = `${year}-${String(month+1).padStart(2,'0')}-${String(daysInMonth(year,month)).padStart(2,'0')}`;
+  const inMonth = iso => iso >= start && iso <= end;
+  return events.filter(e => inMonth(e.date)).length
+    + ranges.filter(r => inMonth(r.startDate) || inMonth(r.endDate)).length;
+}
+// monthCount 5 -> last month is Mär 2027 (index 4). An event on 2027-03-10 counts; one in Jan doesn't.
+eq('affected count in last month', affectedInLastMonth(5,
+  [{ date: '2027-03-10' }, { date: '2027-01-13' }],
+  [{ startDate: '2027-03-01', endDate: '2027-03-20' }]), 2);
+eq('affected count zero when none', affectedInLastMonth(5,
+  [{ date: '2027-01-13' }], [{ startDate: '2026-12-01', endDate: '2026-12-10' }]), 0);
+
+// min-zoom clamp shows ~2 months: viewport width / (2*MONTH_W)
+const minZoom = vw => vw / (2 * MONTH_W);
+eq('minZoom at 800px viewport', minZoom(800), 800 / 640);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
