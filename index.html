@@ -64,13 +64,13 @@
   #drawer .navbtn.danger { color: #ff9a8f; }
 
   /* ---- Floating add button (timeline only) + its popup ---- */
-  #fab { position: fixed; z-index: 55; top: calc(12px + env(safe-area-inset-top));
-    right: calc(14px + env(safe-area-inset-right)); width: 52px; height: 52px; border-radius: 50%;
-    background: var(--accent); color: #fff; border: none; font-size: 28px; line-height: 1;
+  #fab { position: fixed; z-index: 55; bottom: calc(18px + env(safe-area-inset-bottom));
+    right: calc(18px + env(safe-area-inset-right)); width: 56px; height: 56px; border-radius: 50%;
+    background: var(--accent); color: #fff; border: none; font-size: 30px; line-height: 1;
     display: grid; place-items: center; box-shadow: 0 8px 22px #0008; padding: 0; }
   body.calendar #fab, body.calendar #fabMenu { display: none; }
-  #fabMenu { position: fixed; z-index: 56; top: calc(72px + env(safe-area-inset-top));
-    right: calc(14px + env(safe-area-inset-right)); background: var(--panel);
+  #fabMenu { position: fixed; z-index: 56; bottom: calc(84px + env(safe-area-inset-bottom));
+    right: calc(18px + env(safe-area-inset-right)); background: var(--panel);
     border: 1px solid #0007; border-radius: 12px; box-shadow: 0 14px 34px #000a; padding: 6px;
     min-width: 180px; display: none; }
   #fabMenu.show { display: block; }
