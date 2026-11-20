@@ -25,14 +25,6 @@
     font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-user-select: none; user-select: none; }
 
   /* Toolbar */
-  #toolbar { position: fixed; top: 0; left: 0; right: 0; min-height: 52px; z-index: 50;
-    display: flex; align-items: center; gap: 8px; padding: max(0px, env(safe-area-inset-top)) 12px 0;
-    padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: 8px;
-    background: rgba(27,33,43,.92); backdrop-filter: blur(6px); border-bottom: 1px solid #0007; }
-  #toolbar .spacer { flex: 1; }
-  #toolbar .title { font-weight: 600; letter-spacing: .3px; margin-right: 8px; }
-  #toolbar .hint { color: var(--muted); font-size: 12px; }
-  @media (max-width: 560px) { #toolbar .hint { display: none; } }
   button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #0006;
     border-radius: 8px; padding: 8px 12px; cursor: pointer; }
   button:hover { background: #2b3545; }
@@ -41,16 +33,54 @@
   button.danger { background: #c0392b; border-color: transparent; color: #fff; }
   button.icon { width: 40px; padding: 8px 0; text-align: center; }
 
-  /* Settings menu */
-  #menu { position: fixed; top: 54px; right: 12px; z-index: 60; background: var(--panel);
-    border: 1px solid #0007; border-radius: 10px; box-shadow: 0 12px 30px #000a; padding: 6px; display: none; min-width: 180px; }
-  #menu.show { display: block; }
-  #menu button { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 6px; }
-  #menu button:hover { background: var(--panel-2); }
-  #menu .sep { height: 1px; background: #0006; margin: 6px 4px; }
+  /* ---- Left slide-out drawer (primary navigation) ---- */
+  /* Edge tab: always visible, toggles the drawer */
+  #drawerTab { position: fixed; top: calc(50% - 26px); left: 0; z-index: 70;
+    width: 26px; height: 52px; border-radius: 0 12px 12px 0; padding: 0;
+    background: var(--accent); color: #fff; border: none; display: grid; place-items: center;
+    box-shadow: 2px 2px 10px #0007; font-size: 16px; transition: left .25s ease; }
+  body.drawer-open #drawerTab { left: 240px; }
+  #drawerTab .chev { transition: transform .25s ease; }
+  body.drawer-open #drawerTab .chev { transform: rotate(180deg); }
 
-  /* Canvas */
-  #viewport { position: fixed; inset: 60px 0 0 0; overflow: hidden; cursor: grab; touch-action: none; }
+  #drawerBackdrop { position: fixed; inset: 0; z-index: 68; background: #0007; opacity: 0;
+    pointer-events: none; transition: opacity .2s ease; }
+  body.drawer-open #drawerBackdrop { opacity: 1; pointer-events: auto; }
+
+  #drawer { position: fixed; top: 0; left: 0; bottom: 0; z-index: 69; width: 240px;
+    background: var(--panel); border-right: 1px solid #0007; box-shadow: 6px 0 24px #0008;
+    transform: translateX(-100%); transition: transform .25s ease;
+    display: flex; flex-direction: column; padding: calc(14px + env(safe-area-inset-top)) 10px 14px;
+    padding-left: calc(10px + env(safe-area-inset-left)); gap: 4px; }
+  body.drawer-open #drawer { transform: translateX(0); }
+  #drawer .brand { font-weight: 700; font-size: 18px; letter-spacing: .3px; padding: 4px 8px 12px; }
+  #drawer .navbtn { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: transparent; border: none; border-radius: 8px; padding: 12px 12px; font-size: 15px; }
+  #drawer .navbtn:hover { background: var(--panel-2); }
+  #drawer .navbtn.active { background: var(--accent); color: #fff; }
+  #drawer .navbtn .ic { width: 20px; text-align: center; }
+  #drawer .sep { height: 1px; background: #0006; margin: 8px 6px; }
+  #drawer .grow { flex: 1; }
+  #drawer .navbtn.danger { color: #ff9a8f; }
+
+  /* ---- Floating add button (timeline only) + its popup ---- */
+  #fab { position: fixed; z-index: 55; top: calc(12px + env(safe-area-inset-top));
+    right: calc(14px + env(safe-area-inset-right)); width: 52px; height: 52px; border-radius: 50%;
+    background: var(--accent); color: #fff; border: none; font-size: 28px; line-height: 1;
+    display: grid; place-items: center; box-shadow: 0 8px 22px #0008; padding: 0; }
+  body.calendar #fab, body.calendar #fabMenu { display: none; }
+  #fabMenu { position: fixed; z-index: 56; top: calc(72px + env(safe-area-inset-top));
+    right: calc(14px + env(safe-area-inset-right)); background: var(--panel);
+    border: 1px solid #0007; border-radius: 12px; box-shadow: 0 14px 34px #000a; padding: 6px;
+    min-width: 180px; display: none; }
+  #fabMenu.show { display: block; }
+  #fabMenu button { display: block; width: 100%; text-align: left; background: transparent;
+    border: none; border-radius: 8px; padding: 11px 12px; font-size: 15px; }
+  #fabMenu button:hover { background: var(--panel-2); }
+  #fabMenu .sep { height: 1px; background: #0006; margin: 6px 4px; }
+
+  /* Canvas (no top bar now — starts at top, with safe-area padding) */
+  #viewport { position: fixed; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }
   #viewport.panning { cursor: grabbing; }
   #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 
@@ -109,20 +139,13 @@
   .addcat input[type=text] { flex: 1; }
   .addcat input[type=color] { width: 44px; }
 
-  /* View toggle in the toolbar */
-  #viewToggle { display: inline-flex; border: 1px solid #0006; border-radius: 8px; overflow: hidden; }
-  #viewToggle button { border: none; border-radius: 0; background: var(--panel-2); padding: 8px 12px; }
-  #viewToggle button.active { background: var(--accent); color: #fff; }
-  .timeline-only, .calendar-only { display: inline-flex; }
-  body.calendar .timeline-only { display: none; }
-  body:not(.calendar) .calendar-only { display: none; }
-
-  /* Calendar section */
-  #calendar { position: fixed; inset: 60px 0 0 0; display: none; flex-direction: column;
-    background: var(--bg); }
+  /* Calendar section — full height, no top bar */
+  #calendar { position: fixed; inset: 0; display: none; flex-direction: column;
+    background: var(--bg); padding-top: env(safe-area-inset-top); }
   body.calendar #calendar { display: flex; }
   body.calendar #viewport { display: none; }
-  #calbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #0007;
+  /* leave room on the left so the drawer edge-tab doesn't cover the controls */
+  #calbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 34px; border-bottom: 1px solid #0007;
     flex-wrap: wrap; }
   #calbar .period { font-weight: 600; font-size: 15px; margin: 0 4px; min-width: 150px; }
   #calbar .spacer { flex: 1; }
@@ -180,25 +203,27 @@
 </style>
 </head>
 <body>
-  <div id="toolbar">
-    <span class="title">Timeline</span>
-    <span id="viewToggle">
-      <button id="vt_timeline" class="active">Timeline</button>
-      <button id="vt_calendar">Calendar</button>
-    </span>
-    <button id="addEvent" class="primary timeline-only">+ Event</button>
-    <button id="addRange" class="timeline-only">+ Range</button>
-    <button id="calAdd" class="primary calendar-only">+ Add</button>
-    <button id="manageCats">Categories</button>
-    <span class="spacer"></span>
-    <span class="hint timeline-only" id="hint">drag empty space to pan · scroll / pinch to zoom</span>
-    <button id="menuBtn" class="icon" title="Settings" aria-label="Settings">⋯</button>
-  </div>
-
-  <div id="menu">
-    <button id="m_fit">Fit to start</button>
+  <!-- Left drawer: primary navigation (Timeline / Calendar / Edit categories / Settings) -->
+  <div id="drawerBackdrop"></div>
+  <button id="drawerTab" aria-label="Open menu"><span class="chev">›</span></button>
+  <nav id="drawer">
+    <div class="brand">Timeline</div>
+    <button class="navbtn active" id="nav_timeline"><span class="ic">▭</span> Timeline</button>
+    <button class="navbtn" id="nav_calendar"><span class="ic">▦</span> Calendar</button>
     <div class="sep"></div>
-    <button id="m_reset" class="danger" style="color:#ff9a8f">Reset all data…</button>
+    <button class="navbtn" id="nav_cats"><span class="ic">◉</span> Edit categories</button>
+    <button class="navbtn" id="nav_fit"><span class="ic">⤢</span> Fit to start</button>
+    <div class="grow"></div>
+    <button class="navbtn danger" id="nav_reset"><span class="ic">⟲</span> Reset all data…</button>
+  </nav>
+
+  <!-- Floating add button (timeline only) -->
+  <button id="fab" aria-label="Add">+</button>
+  <div id="fabMenu">
+    <button id="fab_event">+ Event</button>
+    <button id="fab_range">+ Range</button>
+    <div class="sep"></div>
+    <button id="fab_cats">Edit categories</button>
   </div>
 
   <div id="viewport">
@@ -1059,8 +1084,8 @@ function calItemsInWindow(fromISO, toISO_) {
 function setView(v) {
   currentView = v;
   document.body.classList.toggle('calendar', v === 'calendar');
-  document.getElementById('vt_timeline').classList.toggle('active', v === 'timeline');
-  document.getElementById('vt_calendar').classList.toggle('active', v === 'calendar');
+  document.getElementById('nav_timeline').classList.toggle('active', v === 'timeline');
+  document.getElementById('nav_calendar').classList.toggle('active', v === 'calendar');
   if (v === 'calendar') { calAnchor = clampMonthAnchor(calAnchor); renderCalendar(); }
   else renderAll();
 }
@@ -1291,15 +1316,30 @@ function hexToRgba(hex, a) {
 function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(s='') { return escapeHtml(s); }
 
-/* ---- toolbar + settings menu ---- */
-document.getElementById('addEvent').onclick = () => openCreate('event');
-document.getElementById('addRange').onclick = () => openCreate('range');
-document.getElementById('calAdd').onclick = () => openAddChooser();
-document.getElementById('manageCats').onclick = () => openCategoryManager();
+/* ---- left drawer (primary nav) ---- */
+const drawerTab = document.getElementById('drawerTab');
+const drawerBackdrop = document.getElementById('drawerBackdrop');
+function openDrawer() { document.body.classList.add('drawer-open'); }
+function closeDrawer() { document.body.classList.remove('drawer-open'); }
+function toggleDrawer() { document.body.classList.toggle('drawer-open'); }
+drawerTab.onclick = e => { e.stopPropagation(); toggleDrawer(); };
+drawerBackdrop.onclick = closeDrawer;
 
-/* ---- view toggle (Timeline / Calendar) ---- */
-document.getElementById('vt_timeline').onclick = () => setView('timeline');
-document.getElementById('vt_calendar').onclick = () => setView('calendar');
+document.getElementById('nav_timeline').onclick = () => { setView('timeline'); closeDrawer(); };
+document.getElementById('nav_calendar').onclick = () => { setView('calendar'); closeDrawer(); };
+document.getElementById('nav_cats').onclick = () => { closeDrawer(); openCategoryManager(); };
+document.getElementById('nav_fit').onclick = () => { closeDrawer(); setView('timeline'); fitToStart(); };
+document.getElementById('nav_reset').onclick = () => { closeDrawer(); confirmReset(); };
+
+/* ---- floating add button (timeline) ---- */
+const fab = document.getElementById('fab');
+const fabMenu = document.getElementById('fabMenu');
+function closeFab() { fabMenu.classList.remove('show'); }
+fab.onclick = e => { e.stopPropagation(); fabMenu.classList.toggle('show'); };
+document.addEventListener('click', e => { if (!fabMenu.contains(e.target) && e.target !== fab) closeFab(); });
+document.getElementById('fab_event').onclick = () => { closeFab(); openCreate('event'); };
+document.getElementById('fab_range').onclick = () => { closeFab(); openCreate('range'); };
+document.getElementById('fab_cats').onclick = () => { closeFab(); openCategoryManager(); };
 
 /* ---- calendar navigation ---- */
 document.getElementById('cal_prev').onclick = () => calShift(-1);
@@ -1308,13 +1348,7 @@ document.getElementById('cal_today').onclick = () => { calAnchor = clampMonthAnc
 document.getElementById('cm_month').onclick = () => { calMode = 'month'; calAnchor = clampMonthAnchor(calAnchor); renderCalendar(); };
 document.getElementById('cm_week').onclick = () => { calMode = 'week'; renderCalendar(); };
 
-const menu = document.getElementById('menu');
-const menuBtn = document.getElementById('menuBtn');
-menuBtn.onclick = e => { e.stopPropagation(); menu.classList.toggle('show'); };
-document.addEventListener('click', e => { if (!menu.contains(e.target) && e.target !== menuBtn) menu.classList.remove('show'); });
-document.getElementById('m_fit').onclick = () => { menu.classList.remove('show'); fitToStart(); };
-document.getElementById('m_reset').onclick = () => {
-  menu.classList.remove('show');
+function confirmReset() {
   modal.innerHTML = `<h3>Reset all data?</h3>
     <p style="color:var(--muted)">Clears every event, range, task, category change, and extra month, and restores the sample data.</p>
     <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Reset</button></div>`;
@@ -1323,7 +1357,7 @@ document.getElementById('m_reset').onclick = () => {
   modal.querySelector('#f_ok').onclick = () => {
     state = freshState(); seedIfEmpty(true); save(); renderAll(); closeModal();
   };
-};
+}
 
 window.addEventListener('resize', applyView);
 
