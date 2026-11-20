@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Timeline — prototype</title>
+<style>
+  :root {
+    --bg: #11151c;
+    --panel: #1b212b;
+    --panel-2: #232b38;
+    --line: #5b6677;
+    --text: #e7ecf3;
+    --muted: #93a0b4;
+    --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-user-select: none; user-select: none; }
+
+  /* Toolbar */
+  #toolbar { position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 50;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px;
+    background: rgba(27,33,43,.92); backdrop-filter: blur(6px); border-bottom: 1px solid #0007; }
+  #toolbar .spacer { flex: 1; }
+  #toolbar .title { font-weight: 600; letter-spacing: .3px; margin-right: 8px; }
+  #toolbar .hint { color: var(--muted); font-size: 12px; }
+  button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #0006;
+    border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  button:hover { background: #2b3545; }
+  button.primary { background: var(--accent); border-color: transparent; color: #fff; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.danger { background: #c0392b; border-color: transparent; color: #fff; }
+
+  /* Canvas */
+  #viewport { position: fixed; inset: 52px 0 0 0; overflow: hidden; cursor: grab; touch-action: none; }
+  #viewport.panning { cursor: grabbing; }
+  #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+
+  svg.layer { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+
+  /* Event cards */
+  .card { position: absolute; width: 190px; background: var(--panel); border: 1px solid #0007;
+    border-left: 5px solid var(--accent); border-radius: 10px; padding: 8px 10px;
+    box-shadow: 0 6px 18px #0006; cursor: grab; }
+  .card.dragging { cursor: grabbing; box-shadow: 0 10px 26px #0009; }
+  .card .hdr { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .card .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+  .card .date { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .card .body { margin-top: 8px; font-size: 13px; color: #d4dce8; white-space: pre-wrap;
+    border-top: 1px solid #0006; padding-top: 8px; }
+  .card .row { display: flex; gap: 6px; margin-top: 8px; }
+  .card .row button { padding: 4px 8px; font-size: 12px; }
+  .card.past { filter: grayscale(1) brightness(.72); opacity: .72; }
+
+  /* Range bars */
+  .range { position: absolute; border-radius: 6px; padding: 3px 8px; overflow: hidden;
+    font-size: 12px; cursor: grab; border: 1px solid #ffffff22; }
+  .range .rh { font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .range.past { filter: grayscale(1) brightness(.7); }
+
+  /* Month labels + add button live in world space */
+  .monthlabel { position: absolute; color: var(--text); font-weight: 600; font-size: 13px;
+    transform: translateX(6px); pointer-events: none; }
+  .addmonth { position: absolute; width: 30px; height: 30px; border-radius: 50%; padding: 0;
+    font-size: 18px; line-height: 1; display: grid; place-items: center; }
+
+  /* Modal */
+  #scrim { position: fixed; inset: 0; background: #0008; z-index: 100; display: none; align-items: center; justify-content: center; }
+  #scrim.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid #0007; border-radius: 14px; padding: 18px;
+    width: min(420px, 92vw); box-shadow: 0 20px 60px #000a; }
+  .modal h3 { margin: 0 0 12px; }
+  .modal label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  .modal input, .modal textarea, .modal select { width: 100%; font: inherit; color: var(--text);
+    background: var(--panel-2); border: 1px solid #0006; border-radius: 8px; padding: 8px 10px; }
+  .modal textarea { resize: vertical; min-height: 70px; }
+  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .modal .seg { display: flex; gap: 6px; margin-bottom: 6px; }
+  .modal .seg button { flex: 1; }
+  .modal .seg button.on { background: var(--accent); border-color: transparent; color: #fff; }
+  #dateFields2 { display: none; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  .swatch.on { border-color: #fff; }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <span class="title">Timeline</span>
+    <button id="addEvent" class="primary">+ Event</button>
+    <button id="addRange">+ Range</button>
+    <span class="spacer"></span>
+    <span class="hint" id="hint">drag empty space to pan · scroll / pinch to zoom</span>
+    <button id="reset">Reset data</button>
+  </div>
+
+  <div id="viewport">
+    <div id="world">
+      <svg class="layer" id="axisLayer"></svg>
+      <svg class="layer" id="edgeLayer"></svg>
+      <div id="nodes"></div>
+    </div>
+  </div>
+
+  <div id="scrim">
+    <div class="modal" id="modal"></div>
+  </div>
+
+<script type="module">
+/* ============================================================================
+   Timeline prototype — zero dependencies.
+   Validates the core interaction from the sketch:
+   axis + manually-added months, zoom/pan (min zoom ~2 months), events created
+   by date as draggable cards with a FIXED connector to their axis date,
+   click-to-expand, ranges as low-opacity bars with overlap stacking, category
+   colors, graying-out of past items, and IndexedDB persistence.
+   This is a throwaway UI; the data model/logic transfer to the real React app.
+============================================================================ */
+
+/* ---- constants ---- */
+const FIRST_YEAR = 2026, FIRST_MONTH = 10; // 0-based: 10 = November
+const MONTH_W = 320;        // px width of one month block at zoom=1 (world units)
+const AXIS_Y = 120;         // y of the axis line in world coords
+const BLOCK_H = 150;        // height of the range band below the axis
+const TODAY = new Date(2026, 10, 20); // fixed "today" for the prototype (20 Nov 2026)
+
+const CATEGORIES = [
+  { id: 'c1', name: 'Deadline', color: '#e8743b' },
+  { id: 'c2', name: 'Exam',     color: '#e74c3c' },
+  { id: 'c3', name: 'Admin',    color: '#4f8cff' },
+  { id: 'c4', name: 'Personal', color: '#2ecc71' },
+];
+const catById = id => CATEGORIES.find(c => c.id === id) || CATEGORIES[0];
+
+/* ---- date helpers ---- */
+const MONTH_NAMES = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+function monthOfIndex(i) { // i=0 -> Nov 2026
+  const total = FIRST_MONTH + i;
+  return { year: FIRST_YEAR + Math.floor(total / 12), month: ((total % 12) + 12) % 12 };
+}
+function parseISO(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function toISO(dt) { const p = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; }
+// map an ISO date -> world X on the axis (null if outside the added months)
+function dateToX(iso) {
+  const dt = parseISO(iso);
+  for (let i = 0; i < state.monthCount; i++) {
+    const { year, month } = monthOfIndex(i);
+    if (year === dt.getFullYear() && month === dt.getMonth()) {
+      const dim = daysInMonth(year, month);
+      return i * MONTH_W + ((dt.getDate() - 1) / dim) * MONTH_W;
+    }
+  }
+  return null; // date is before Nov 2026 or beyond the last added month
+}
+const axisEndX = () => state.monthCount * MONTH_W;
+
+/* ---- state + persistence (IndexedDB) ---- */
+const DB_NAME = 'timeline-proto', STORE = 'kv', KEY = 'state';
+let state = { monthCount: 5, events: [], ranges: [] }; // default: Nov..Mär (5 months)
+
+function openDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(STORE);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function loadState() {
+  try {
+    const db = await openDB();
+    const v = await new Promise((res, rej) => {
+      const tx = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
+      tx.onsuccess = () => res(tx.result); tx.onerror = () => rej(tx.error);
+    });
+    if (v) state = v;
+  } catch (e) { console.warn('load failed', e); }
+}
+let saveTimer = null;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      const db = await openDB();
+      db.transaction(STORE, 'readwrite').objectStore(STORE).put(state, KEY);
+    } catch (e) { console.warn('save failed', e); }
+  }, 150);
+}
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+/* ---- view transform (pan/zoom) ---- */
+const vp = document.getElementById('viewport');
+const world = document.getElementById('world');
+let view = { x: 20, y: 10, k: 1 };
+function minZoom() { // fully zoomed out shows at most ~2 months
+  return vp.clientWidth / (2 * MONTH_W);
+}
+function clampZoom(k) { return Math.min(2.5, Math.max(minZoom(), k)); }
+function applyView() {
+  view.k = clampZoom(view.k);
+  world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`;
+}
+
+/* ---- rendering ---- */
+const axisLayer = document.getElementById('axisLayer');
+const edgeLayer = document.getElementById('edgeLayer');
+const nodes = document.getElementById('nodes');
+const svgNS = 'http://www.w3.org/2000/svg';
+function line(x1,y1,x2,y2,stroke,w,dash) {
+  const l = document.createElementNS(svgNS,'line');
+  l.setAttribute('x1',x1); l.setAttribute('y1',y1); l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+  l.setAttribute('stroke',stroke); l.setAttribute('stroke-width',w);
+  if (dash) l.setAttribute('stroke-dasharray',dash);
+  return l;
+}
+
+function renderAxis() {
+  axisLayer.innerHTML = '';
+  const endX = axisEndX();
+  // main axis line
+  axisLayer.appendChild(line(0, AXIS_Y, endX, AXIS_Y, '#cdd6e5', 2));
+  // month ticks + labels + block borders
+  for (let i = 0; i <= state.monthCount; i++) {
+    const x = i * MONTH_W;
+    axisLayer.appendChild(line(x, AXIS_Y - 16, x, AXIS_Y + BLOCK_H, '#5b6677', i === 0 || i === state.monthCount ? 2 : 1));
+  }
+  // labels rendered as HTML (nodes layer) so they stay crisp
+  [...nodes.querySelectorAll('.monthlabel,.addmonth')].forEach(n => n.remove());
+  for (let i = 0; i < state.monthCount; i++) {
+    const { year, month } = monthOfIndex(i);
+    const lbl = document.createElement('div');
+    lbl.className = 'monthlabel';
+    lbl.textContent = `${MONTH_NAMES[month]} ${String(year).slice(2)}`;
+    lbl.style.left = (i * MONTH_W) + 'px';
+    lbl.style.top = (AXIS_Y - 42) + 'px';
+    nodes.appendChild(lbl);
+  }
+  // "+" add-month button at right end
+  const add = document.createElement('button');
+  add.className = 'addmonth'; add.textContent = '+'; add.title = 'Add next month';
+  add.style.left = (endX + 14) + 'px';
+  add.style.top = (AXIS_Y - 15) + 'px';
+  add.onpointerdown = e => e.stopPropagation();
+  add.onclick = () => { state.monthCount++; save(); renderAll(); };
+  nodes.appendChild(add);
+}
+
+/* overlap stacking for ranges: greedy slot assignment within the band */
+function assignRangeSlots(ranges) {
+  // Only consider ranges with a valid axis position
+  const items = ranges.map(r => ({ r, a: dateToX(r.startDate), b: dateToX(r.endDate) }))
+                      .filter(o => o.a !== null && o.b !== null)
+                      .sort((p,q) => p.a - q.a);
+  const slotEnds = []; // x-end currently occupying each slot
+  for (const o of items) {
+    let s = slotEnds.findIndex(end => end <= o.a);
+    if (s === -1) { s = slotEnds.length; slotEnds.push(o.b); } else slotEnds[s] = o.b;
+    o.slot = s;
+  }
+  const maxSlots = Math.max(1, slotEnds.length);
+  return { items, maxSlots };
+}
+
+function renderRanges() {
+  [...nodes.querySelectorAll('.range')].forEach(n => n.remove());
+  const { items, maxSlots } = assignRangeSlots(state.ranges);
+  // default single range = half the band; thinner as overlaps grow
+  const perSlot = (BLOCK_H * 0.5) / Math.max(1, Math.ceil(maxSlots / 1));
+  const h = Math.max(16, Math.min(BLOCK_H * 0.5, (BLOCK_H - 8) / maxSlots));
+  items.forEach(({ r, a, b, slot }) => {
+    const cat = catById(r.categoryId);
+    const el = document.createElement('div');
+    el.className = 'range';
+    const past = parseISO(r.endDate) < TODAY;
+    if (past) el.classList.add('past');
+    el.style.left = Math.min(a,b) + 'px';
+    el.style.width = Math.max(6, Math.abs(b - a)) + 'px';
+    el.style.top = (AXIS_Y + 6 + slot * (h + 4)) + 'px';
+    el.style.height = h + 'px';
+    el.style.background = hexToRgba(cat.color, 0.22);
+    el.style.borderColor = hexToRgba(cat.color, 0.5);
+    el.innerHTML = `<div class="rh">${escapeHtml(r.header)}</div>`;
+    el.title = `${r.header}\n${r.startDate} → ${r.endDate}`;
+    el.onclick = e => { e.stopPropagation(); openEditRange(r); };
+    nodes.appendChild(el);
+  });
+}
+
+function renderEvents() {
+  [...nodes.querySelectorAll('.card')].forEach(n => n.remove());
+  edgeLayer.innerHTML = '';
+  for (const ev of state.events) {
+    const cat = catById(ev.categoryId);
+    const ax = dateToX(ev.date);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.left = ev.x + 'px';
+    card.style.top = ev.y + 'px';
+    card.style.borderLeftColor = cat.color;
+    const past = parseISO(ev.date) < TODAY;
+    if (past) card.classList.add('past');
+    const expanded = !!ev._open;
+    card.innerHTML = `
+      <div class="hdr"><span class="dot" style="background:${cat.color}"></span>${escapeHtml(ev.header)}</div>
+      <div class="date">${ev.date} · ${escapeHtml(cat.name)}</div>
+      ${expanded ? `<div class="body">${escapeHtml(ev.text || '(no notes)')}</div>
+        <div class="row"><button data-edit>Edit</button><button data-del class="danger">Delete</button></div>` : ''}`;
+    // connector: FIXED to the axis date (vertical drop line), independent of card drag
+    if (ax !== null) {
+      const cx = ev.x + 16, cy = ev.y + 10; // anchor near top-left of card
+      edgeLayer.appendChild(line(ax, AXIS_Y, ax, AXIS_Y, '#93a0b4', 1)); // tick dot base
+      edgeLayer.appendChild(line(ax, AXIS_Y, cx, cy, past ? '#6b7483' : cat.color, 1.5, '4 3'));
+      const anchor = document.createElementNS(svgNS,'circle');
+      anchor.setAttribute('cx', ax); anchor.setAttribute('cy', AXIS_Y);
+      anchor.setAttribute('r', 3.5); anchor.setAttribute('fill', past ? '#6b7483' : cat.color);
+      edgeLayer.appendChild(anchor);
+    }
+    // interactions
+    makeDraggable(card, ev);
+    card.querySelector('[data-edit]')?.addEventListener('click', e => { e.stopPropagation(); openEditEvent(ev); });
+    card.querySelector('[data-del]')?.addEventListener('click', e => { e.stopPropagation(); confirmDelete('event', ev); });
+    nodes.appendChild(card);
+  }
+}
+
+function renderAll() { renderAxis(); renderRanges(); renderEvents(); applyView(); }
+
+/* ---- dragging a card (updates saved position); click (no drag) toggles expand ---- */
+function makeDraggable(card, ev) {
+  let startX, startY, origX, origY, moved;
+  card.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    e.stopPropagation();
+    card.setPointerCapture(e.pointerId);
+    card.classList.add('dragging');
+    startX = e.clientX; startY = e.clientY; origX = ev.x; origY = ev.y; moved = false;
+    const move = m => {
+      const dx = (m.clientX - startX) / view.k, dy = (m.clientY - startY) / view.k;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      ev.x = origX + dx; ev.y = origY + dy;
+      card.style.left = ev.x + 'px'; card.style.top = ev.y + 'px';
+      renderEvents(); // redraw connectors live (anchor stays fixed on the axis date)
+    };
+    const up = u => {
+      card.releasePointerCapture(e.pointerId);
+      card.classList.remove('dragging');
+      vp.removeEventListener('pointermove', move); vp.removeEventListener('pointerup', up);
+      if (moved) { save(); } else { ev._open = !ev._open; renderEvents(); }
+    };
+    vp.addEventListener('pointermove', move); vp.addEventListener('pointerup', up);
+  });
+}
+
+/* ---- pan & zoom ---- */
+let panning = false, panStart;
+vp.addEventListener('pointerdown', e => {
+  if (e.target.closest('.card, .range, .addmonth, button')) return;
+  panning = true; vp.classList.add('panning');
+  panStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+  vp.setPointerCapture(e.pointerId);
+});
+vp.addEventListener('pointermove', e => {
+  if (!panning) return;
+  view.x = panStart.vx + (e.clientX - panStart.x);
+  view.y = panStart.vy + (e.clientY - panStart.y);
+  applyView();
+});
+vp.addEventListener('pointerup', e => { panning = false; vp.classList.remove('panning'); });
+vp.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = vp.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const prevK = view.k;
+  const k = clampZoom(view.k * (e.deltaY < 0 ? 1.1 : 1/1.1));
+  // zoom toward cursor
+  view.x = mx - ((mx - view.x) * (k / prevK));
+  view.y = my - ((my - view.y) * (k / prevK));
+  view.k = k; applyView();
+}, { passive: false });
+
+/* ---- modals ---- */
+const scrim = document.getElementById('scrim');
+const modal = document.getElementById('modal');
+function closeModal() { scrim.classList.remove('show'); modal.innerHTML = ''; }
+scrim.addEventListener('pointerdown', e => { if (e.target === scrim) closeModal(); });
+
+function catOptions(sel) {
+  return CATEGORIES.map(c => `<option value="${c.id}" ${c.id===sel?'selected':''}>${c.name}</option>`).join('');
+}
+
+function openCreate(kind) { // 'event' | 'range'
+  const todayISO = toISO(TODAY);
+  modal.innerHTML = `
+    <h3>New ${kind}</h3>
+    <label>Header</label><input id="f_header" placeholder="e.g. ML Exam" />
+    <label>Category</label><select id="f_cat">${catOptions('c1')}</select>
+    ${kind === 'event'
+      ? `<label>Date</label><input id="f_date" type="date" value="${todayISO}" />`
+      : `<label>Start date</label><input id="f_start" type="date" value="${todayISO}" />
+         <label>End date</label><input id="f_end" type="date" value="${todayISO}" />`}
+    <label>Notes</label><textarea id="f_text" placeholder="details…"></textarea>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Create</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => {
+    const header = modal.querySelector('#f_header').value.trim() || 'Untitled';
+    const categoryId = modal.querySelector('#f_cat').value;
+    const text = modal.querySelector('#f_text').value;
+    if (kind === 'event') {
+      const date = modal.querySelector('#f_date').value;
+      // spawn the card near its axis date so the connector is short
+      const ax = dateToX(date);
+      const x = (ax ?? 40) + 20, y = AXIS_Y + 60 + Math.random() * 40;
+      state.events.push({ id: uid(), categoryId, header, date, text, x, y, _open: false });
+    } else {
+      const startDate = modal.querySelector('#f_start').value;
+      const endDate = modal.querySelector('#f_end').value;
+      state.ranges.push({ id: uid(), categoryId, header, startDate, endDate, text });
+    }
+    save(); renderAll(); closeModal();
+  };
+}
+
+function openEditEvent(ev) {
+  modal.innerHTML = `
+    <h3>Edit event</h3>
+    <label>Header</label><input id="f_header" value="${escapeAttr(ev.header)}" />
+    <label>Category</label><select id="f_cat">${catOptions(ev.categoryId)}</select>
+    <label>Date</label><input id="f_date" type="date" value="${ev.date}" />
+    <label>Notes</label><textarea id="f_text">${escapeHtml(ev.text || '')}</textarea>
+    <div class="actions"><button id="f_del" class="danger">Delete</button>
+      <button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Save</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_del').onclick = () => { closeModal(); confirmDelete('event', ev); };
+  modal.querySelector('#f_ok').onclick = () => {
+    ev.header = modal.querySelector('#f_header').value.trim() || 'Untitled';
+    ev.categoryId = modal.querySelector('#f_cat').value;
+    ev.date = modal.querySelector('#f_date').value;
+    ev.text = modal.querySelector('#f_text').value;
+    save(); renderAll(); closeModal();
+  };
+}
+
+function openEditRange(r) {
+  modal.innerHTML = `
+    <h3>Edit range</h3>
+    <label>Header</label><input id="f_header" value="${escapeAttr(r.header)}" />
+    <label>Category</label><select id="f_cat">${catOptions(r.categoryId)}</select>
+    <label>Start date</label><input id="f_start" type="date" value="${r.startDate}" />
+    <label>End date</label><input id="f_end" type="date" value="${r.endDate}" />
+    <label>Notes</label><textarea id="f_text">${escapeHtml(r.text || '')}</textarea>
+    <div class="actions"><button id="f_del" class="danger">Delete</button>
+      <button id="f_cancel">Cancel</button><button id="f_ok" class="primary">Save</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_del').onclick = () => { closeModal(); confirmDelete('range', r); };
+  modal.querySelector('#f_ok').onclick = () => {
+    r.header = modal.querySelector('#f_header').value.trim() || 'Untitled';
+    r.categoryId = modal.querySelector('#f_cat').value;
+    r.startDate = modal.querySelector('#f_start').value;
+    r.endDate = modal.querySelector('#f_end').value;
+    r.text = modal.querySelector('#f_text').value;
+    save(); renderAll(); closeModal();
+  };
+}
+
+function confirmDelete(kind, item) {
+  modal.innerHTML = `
+    <h3>Delete ${kind}?</h3>
+    <p style="color:var(--muted)">“${escapeHtml(item.header)}” will be removed. This can't be undone.</p>
+    <div class="actions"><button id="f_cancel">Cancel</button>
+      <button id="f_ok" class="danger">Delete</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => {
+    if (kind === 'event') state.events = state.events.filter(e => e.id !== item.id);
+    else state.ranges = state.ranges.filter(r => r.id !== item.id);
+    save(); renderAll(); closeModal();
+  };
+}
+
+/* ---- small utils ---- */
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+function escapeHtml(s='') { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s='') { return escapeHtml(s); }
+
+/* ---- toolbar ---- */
+document.getElementById('addEvent').onclick = () => openCreate('event');
+document.getElementById('addRange').onclick = () => openCreate('range');
+document.getElementById('reset').onclick = () => {
+  modal.innerHTML = `<h3>Reset all data?</h3>
+    <p style="color:var(--muted)">Clears every event, range, and extra month.</p>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Reset</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => {
+    state = { monthCount: 5, events: [], ranges: [] }; seedIfEmpty(true); save(); renderAll(); closeModal();
+  };
+};
+
+window.addEventListener('resize', applyView);
+
+/* ---- seed sample data (first run only) so there's something to see ---- */
+function seedIfEmpty(force=false) {
+  if (!force && (state.events.length || state.ranges.length)) return;
+  state.events = [
+    { id: uid(), categoryId: 'c1', header: 'Frist RISE',  date: '2026-11-30', text: 'Application deadline for RISE.', x: 40,  y: 260, _open: false },
+    { id: uid(), categoryId: 'c2', header: 'ML Exam',      date: '2026-12-15', text: 'Machine learning written exam.', x: 360, y: 300, _open: false },
+    { id: uid(), categoryId: 'c3', header: 'DADH Exam',    date: '2027-01-13', text: 'Date to be confirmed.',          x: 740, y: 250, _open: false },
+  ];
+  state.ranges = [
+    { id: uid(), categoryId: 'c4', header: 'Semester break', startDate: '2026-12-20', endDate: '2027-01-10', text: 'Holiday period.' },
+    { id: uid(), categoryId: 'c3', header: 'Exam phase',     startDate: '2027-01-05', endDate: '2027-02-15', text: 'Overlaps the break to show stacking.' },
+  ];
+}
+
+/* ---- boot ---- */
+(async function main() {
+  await loadState();
+  seedIfEmpty();
+  // start zoomed out a touch and centered on the first month
+  view.k = clampZoom(Math.max(minZoom(), 0.6));
+  renderAll();
+})();
+</script>
+</body>
+</html>
