@@ -1305,43 +1305,71 @@ function openGoalChart() {
   else gb.appendChild(buildArchiveList());
 }
 
-// SVG line chart of cumulative score over time (stock-chart style).
+// SVG line chart of cumulative score over time (stock-chart style) with
+// annotated axes: Y = points (integer gridlines), X = time (a date under each point).
 function buildScoreChart() {
   const pts = goalScoreSeries();
-  const W = Math.min(modal.clientWidth || 360, 400), H = 200, PAD = 24;
+  const W = Math.min(modal.clientWidth || 360, 420), H = 240;
+  const L = 34, R = 12, T = 12, B = 58; // margins: left (y labels), bottom (x dates)
   const svg = document.createElementNS(svgNS, 'svg');
   svg.setAttribute('width', '100%'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.style.display = 'block';
-  if (!pts.length) {
+  svg.style.display = 'block'; svg.style.overflow = 'visible';
+  const txt = (x, y, s, opts = {}) => {
     const t = document.createElementNS(svgNS, 'text');
-    t.setAttribute('x', W/2); t.setAttribute('y', H/2); t.setAttribute('fill', '#93a0b4');
-    t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '13');
-    t.textContent = 'No resolved goals yet.'; svg.appendChild(t); return svg;
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('fill', opts.fill || '#93a0b4'); t.setAttribute('font-size', opts.size || '10');
+    t.setAttribute('text-anchor', opts.anchor || 'middle');
+    if (opts.transform) t.setAttribute('transform', opts.transform);
+    t.textContent = s; return t;
+  };
+
+  if (!pts.length) {
+    svg.appendChild(txt(W/2, H/2, 'No resolved goals yet.', { size: 13 }));
+    return svg;
   }
+
   const scores = pts.map(p => p.score);
   const minS = Math.min(0, ...scores), maxS = Math.max(0, ...scores);
   const span = (maxS - minS) || 1;
   const n = pts.length;
-  const xFor = i => PAD + (n === 1 ? (W - 2*PAD)/2 : (i/(n-1)) * (W - 2*PAD));
-  const yFor = s => (H - PAD) - ((s - minS) / span) * (H - 2*PAD);
-  // zero baseline
-  const zeroY = yFor(0);
-  svg.appendChild(line(PAD, zeroY, W - PAD, zeroY, '#3a4454', 1, '3 3'));
-  // path
+  const plotW = W - L - R, plotH = H - T - B;
+  const xFor = i => L + (n === 1 ? plotW/2 : (i/(n-1)) * plotW);
+  const yFor = s => (T + plotH) - ((s - minS) / span) * plotH;
+
+  // --- Y axis: integer point gridlines + labels ---
+  for (let s = minS; s <= maxS; s++) {
+    const y = yFor(s);
+    svg.appendChild(line(L, y, W - R, y, s === 0 ? '#4a5568' : '#2a3240', 1, s === 0 ? '' : '2 3'));
+    svg.appendChild(txt(L - 6, y + 3.5, String(s), { anchor: 'end' }));
+  }
+  // Y axis line + title
+  svg.appendChild(line(L, T, L, T + plotH, '#4a5568', 1));
+  svg.appendChild(txt(0, 0, 'points', { anchor: 'middle', transform: `translate(10 ${T + plotH/2}) rotate(-90)` }));
+
+  // --- X axis line + title ---
+  const axisY = yFor(minS);
+  svg.appendChild(line(L, axisY, W - R, axisY, '#4a5568', 1));
+
+  // --- line path ---
   let d = '';
   pts.forEach((p, i) => { d += (i ? 'L' : 'M') + xFor(i) + ' ' + yFor(p.score) + ' '; });
   const path = document.createElementNS(svgNS, 'path');
   path.setAttribute('d', d.trim()); path.setAttribute('fill', 'none');
   path.setAttribute('stroke', GOAL_COLOR); path.setAttribute('stroke-width', '2');
   svg.appendChild(path);
-  // dots
+
+  // --- points + per-point date timestamp (rotated under the X axis) ---
   pts.forEach((p, i) => {
+    const px = xFor(i);
     const c = document.createElementNS(svgNS, 'circle');
-    c.setAttribute('cx', xFor(i)); c.setAttribute('cy', yFor(p.score)); c.setAttribute('r', 3.5);
+    c.setAttribute('cx', px); c.setAttribute('cy', yFor(p.score)); c.setAttribute('r', 3.5);
     c.setAttribute('fill', p.status === 'hit' ? '#7fe0a0' : '#e98ba0');
     const title = document.createElementNS(svgNS, 'title');
-    title.textContent = `${p.title} · ${p.status} · ${fmtDMY(p.date)} · score ${p.score}`;
+    title.textContent = `${p.title} · ${p.status} · ${fmtDMY(p.date)} · ${p.score} pts`;
     c.appendChild(title); svg.appendChild(c);
+    // tick + rotated date label on the X axis
+    svg.appendChild(line(px, axisY, px, axisY + 4, '#4a5568', 1));
+    svg.appendChild(txt(0, 0, fmtDMY(p.date), { anchor: 'end', transform: `translate(${px} ${axisY + 8}) rotate(-45)` }));
   });
   return svg;
 }
