@@ -429,9 +429,10 @@ function cycleSegments(startISO, fromISO, toISO_) {
   while (true) {
     const cycleStart = addDays(start, k * CYCLE_LEN);
     if (cycleStart > to) break;
-    const inStart = cycleStart, inEnd = addDays(cycleStart, CYCLE_IN_DAYS - 1);
-    const outStart = addDays(cycleStart, CYCLE_IN_DAYS), outEnd = addDays(cycleStart, CYCLE_LEN - 1);
-    for (const seg of [{ phase:'in', s:inStart, e:inEnd }, { phase:'out', s:outStart, e:outEnd }]) {
+    // start date = first day of the OUT week, then IN for 21 days.
+    const outStart = cycleStart, outEnd = addDays(cycleStart, CYCLE_OUT_DAYS - 1);
+    const inStart = addDays(cycleStart, CYCLE_OUT_DAYS), inEnd = addDays(cycleStart, CYCLE_LEN - 1);
+    for (const seg of [{ phase:'out', s:outStart, e:outEnd }, { phase:'in', s:inStart, e:inEnd }]) {
       const lo = new Date(Math.max(seg.s, from, start));
       const hi = new Date(Math.min(seg.e, to));
       if (lo <= hi) out.push({ phase: seg.phase, start: toISO(lo), end: toISO(hi) });
@@ -696,7 +697,7 @@ function renderCycle() {
   // Label at the start of the bar.
   const lbl = document.createElement('div');
   lbl.className = 'cycle-label';
-  lbl.textContent = `Cycle · from ${fmtDMY(state.cycle.start)} · 21 in / 7 out`;
+  lbl.textContent = `Cycle · out from ${fmtDMY(state.cycle.start)} · 7 out / 21 in`;
   lbl.style.left = '0px';
   lbl.style.top = (CYCLE_Y - 16) + 'px';
   nodes.appendChild(lbl);
@@ -933,12 +934,12 @@ function openCycleDialog() {
   const startVal = existing || toISO(TODAY);
   modal.innerHTML = `
     <h3>${existing ? 'Cycle tracker' : 'Start cycle tracker'}</h3>
-    <p style="color:var(--muted)">A 28-day NuvaRing cycle: 21 days in, then 7 days out, repeating from the start date.</p>
+    <p style="color:var(--muted)">A 28-day NuvaRing cycle: 7 days out, then 21 days in, repeating. The start date is the first day the ring is <b>out</b>.</p>
     <div class="cycle-legend">
-      <span><span class="sw" style="background:${CYCLE_IN_COLOR}"></span>Ring in (21 d)</span>
       <span><span class="sw" style="background:${CYCLE_OUT_COLOR}"></span>Ring out (7 d)</span>
+      <span><span class="sw" style="background:${CYCLE_IN_COLOR}"></span>Ring in (21 d)</span>
     </div>
-    <label>Cycle start date</label>
+    <label>Out-period start date</label>
     <input id="cy_start" type="date" value="${startVal}" />
     <div class="actions">
       ${existing ? '<button id="cy_remove" class="danger">Remove</button>' : ''}
