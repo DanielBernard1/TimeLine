@@ -266,7 +266,7 @@
 
 /* ---- constants ---- */
 const FIRST_YEAR = 2026, FIRST_MONTH = 10; // 0-based: 10 = November
-const MONTH_W = 320;        // px width of one month block at zoom=1 (world units)
+const MONTH_W = 427;        // px width of one month block at zoom=1 (world units) — a third wider than 320
 const AXIS_Y = 120;         // y of the axis line in world coords
 const BLOCK_H = 150;        // height of the range band below the axis
 const TODAY = startOfDay(new Date()); // real "today" (graying is live)
@@ -493,7 +493,7 @@ function renderAxis() {
     const { year, month } = monthOfIndex(i);
     const lbl = document.createElement('div');
     lbl.className = 'monthlabel';
-    lbl.textContent = `${MONTH_NAMES[month]} ${String(year).slice(2)}`;
+    lbl.textContent = `${MONTH_NAMES[month]} ${year}`;
     lbl.style.left = (i * MONTH_W) + 'px';
     lbl.style.top = (AXIS_Y - 42) + 'px';
     nodes.appendChild(lbl);
