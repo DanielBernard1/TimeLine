@@ -242,7 +242,10 @@
   .goal-item .chk { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 6px; border: 2px solid #6b7483;
     display: grid; place-items: center; cursor: pointer; font-size: 14px; color: var(--bg); background: transparent; }
   .goal-item .chk.on { background: var(--goal, #f5c518); border-color: var(--goal, #f5c518); }
-  .goal-item .gmain { flex: 1; min-width: 0; cursor: pointer; }
+  .goal-item { cursor: pointer; }
+  .goal-item .gdot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; background: var(--goal, #f5c518); }
+  .goal-item .gchev { color: var(--muted); font-size: 18px; flex: 0 0 auto; }
+  .goal-item .gmain { flex: 1; min-width: 0; }
   .goal-item .gtitle { font-weight: 600; }
   .goal-item .gmeta { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .goal-item .gmiss { font-size: 12px; padding: 5px 8px; }
@@ -1155,6 +1158,26 @@ function renderGoals() {
     for (const g of active) wrap.appendChild(goalRow(g));
     body.appendChild(wrap);
   }
+  // Reset (testing): clears all goals — active and archived (chart history).
+  const resetWrap = document.createElement('div');
+  resetWrap.style.cssText = 'margin-top:28px;padding-top:14px;border-top:1px solid #0006;';
+  const rb = document.createElement('button');
+  rb.className = 'danger'; rb.textContent = 'Reset goals…';
+  rb.onclick = confirmResetGoals;
+  resetWrap.appendChild(rb);
+  body.appendChild(resetWrap);
+}
+
+function confirmResetGoals() {
+  modal.innerHTML = `<h3>Reset all goals?</h3>
+    <p style="color:var(--muted)">Deletes every goal — active and archived — and clears the progress chart. This can't be undone. (Does not touch your timeline, calendar, or categories.)</p>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Reset goals</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => {
+    state.goals = [];
+    save(); renderGoals(); if (currentView === 'timeline') renderAll(); closeModal();
+  };
 }
 
 function goalRow(g) {
@@ -1164,18 +1187,13 @@ function goalRow(g) {
   const meta = [];
   if (g.endDate) meta.push(`🎯 ${fmtDMY(g.endDate)}`);
   if (g.notes) meta.push(escapeHtml(g.notes));
+  // The row only opens the editor; done/miss live inside the editor (so a stray
+  // tap can't resolve a goal).
   row.innerHTML = `
-    <button class="chk" title="Mark done">✓</button>
+    <span class="gdot"></span>
     <div class="gmain"><div class="gtitle">${escapeHtml(g.title)}</div>${meta.length ? `<div class="gmeta">${meta.join(' · ')}</div>` : ''}</div>
-    ${g.endDate ? '' : '<button class="gmiss danger" title="Mark missed">Miss</button>'}`;
-  // check done -> hit (+1), archived
-  row.querySelector('.chk').onclick = () => {
-    g.done = true; g.status = 'hit'; g.resolvedOn = toISO(TODAY);
-    save(); renderGoals(); if (currentView === 'timeline') renderAll();
-  };
-  row.querySelector('.gmain').onclick = () => openGoalDialog(g, g.group);
-  const miss = row.querySelector('.gmiss');
-  if (miss) miss.onclick = () => confirmMissGoal(g);
+    <span class="gchev">›</span>`;
+  row.onclick = () => openGoalDialog(g, g.group);
   return row;
 }
 
@@ -1184,26 +1202,35 @@ function confirmMissGoal(g) {
     <p style="color:var(--muted)">“${escapeHtml(g.title)}” will be archived as a miss (−1 on the chart). You can try again later from the archive.</p>
     <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Mark missed</button></div>`;
   scrim.classList.add('show');
-  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_cancel').onclick = () => openGoalDialog(g, g.group);
   modal.querySelector('#f_ok').onclick = () => {
     g.status = 'missed'; g.resolvedOn = toISO(TODAY);
-    save(); renderGoals(); closeModal();
+    save(); renderGoals(); if (currentView === 'timeline') renderAll(); closeModal();
   };
 }
 
-function openGoalDialog(g, groupKey) {
+// g: existing goal to edit (or null). groupKey: default group for a new goal.
+// prefill: seed values for a brand-new goal (used by "Try again" on a missed goal).
+function openGoalDialog(g, groupKey, prefill) {
   const editing = !!g;
+  const src = editing ? g : (prefill || {});
+  const grp = (editing ? g.group : (prefill ? prefill.group : groupKey)) || 'short';
+  const heading = editing ? 'Edit goal' : (prefill ? 'Try again — new goal' : 'New goal');
   modal.innerHTML = `
-    <h3>${editing ? 'Edit goal' : 'New goal'}</h3>
-    <label>Title</label><input id="g_title" value="${editing ? escapeAttr(g.title) : ''}" placeholder="e.g. Finish thesis draft" />
+    <h3>${heading}</h3>
+    <label>Title</label><input id="g_title" value="${src.title ? escapeAttr(src.title) : ''}" placeholder="e.g. Finish thesis draft" />
     <label>Group</label>
     <select id="g_group">
-      <option value="short" ${(editing ? g.group : groupKey) === 'short' ? 'selected' : ''}>Short term</option>
-      <option value="long" ${(editing ? g.group : groupKey) === 'long' ? 'selected' : ''}>Long term</option>
+      <option value="short" ${grp === 'short' ? 'selected' : ''}>Short term</option>
+      <option value="long" ${grp === 'long' ? 'selected' : ''}>Long term</option>
     </select>
     <label>End date (optional — shows on the timeline)</label>
-    <input id="g_end" type="date" value="${editing && g.endDate ? g.endDate : ''}" />
-    <label>Notes (optional)</label><textarea id="g_notes">${editing ? escapeHtml(g.notes || '') : ''}</textarea>
+    <input id="g_end" type="date" value="${src.endDate ? src.endDate : ''}" />
+    <label>Notes (optional)</label><textarea id="g_notes">${src.notes ? escapeHtml(src.notes) : ''}</textarea>
+    ${editing ? `<div class="actions" style="justify-content:flex-start;border-top:1px solid #0006;padding-top:12px;margin-top:14px;">
+      <button id="g_done" class="primary" style="background:#1f8a4c">✓ Mark as done</button>
+      ${g.endDate ? '' : '<button id="g_miss" class="danger">Mark as missed</button>'}
+    </div>` : ''}
     <div class="actions">
       ${editing ? '<button id="g_del" class="danger">Delete</button>' : ''}
       <button id="g_cancel">Cancel</button>
@@ -1213,6 +1240,10 @@ function openGoalDialog(g, groupKey) {
   modal.querySelector('#g_cancel').onclick = closeModal;
   const del = modal.querySelector('#g_del');
   if (del) del.onclick = () => { closeModal(); confirmDeleteGoal(g); };
+  const done = modal.querySelector('#g_done');
+  if (done) done.onclick = () => confirmDoneGoal(g);
+  const miss = modal.querySelector('#g_miss');
+  if (miss) miss.onclick = () => confirmMissGoal(g);
   modal.querySelector('#g_ok').onclick = () => {
     const title = modal.querySelector('#g_title').value.trim() || 'Untitled';
     const group = modal.querySelector('#g_group').value;
@@ -1220,6 +1251,17 @@ function openGoalDialog(g, groupKey) {
     const notes = modal.querySelector('#g_notes').value;
     if (editing) { Object.assign(g, { title, group, endDate, notes }); }
     else { state.goals.push({ id: uid(), title, group, endDate, notes, done: false, status: 'active' }); }
+    save(); renderGoals(); if (currentView === 'timeline') renderAll(); closeModal();
+  };
+}
+
+function confirmDoneGoal(g) {
+  modal.innerHTML = `<h3>Mark goal as done?</h3>
+    <p style="color:var(--muted)">“${escapeHtml(g.title)}” will be archived as a hit (+1 on the chart).</p>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="primary" style="background:#1f8a4c">Mark done</button></div>`;
+  modal.querySelector('#f_cancel').onclick = () => openGoalDialog(g, g.group);
+  modal.querySelector('#f_ok').onclick = () => {
+    g.done = true; g.status = 'hit'; g.resolvedOn = toISO(TODAY);
     save(); renderGoals(); if (currentView === 'timeline') renderAll(); closeModal();
   };
 }
@@ -1318,8 +1360,10 @@ function buildArchiveList() {
       ${g.status === 'missed' ? '<button class="gmiss" data-retry>Try again</button>' : ''}`;
     const retry = row.querySelector('[data-retry]');
     if (retry) retry.onclick = () => {
-      g.status = 'active'; delete g.resolvedOn; delete g.done;
-      save(); openGoalChart(); renderGoals(); if (currentView === 'timeline') renderAll();
+      // Keep the missed record in the archive (its -1 stays on the chart);
+      // open an editable COPY as a brand-new goal so the user can set a new date.
+      closeModal();
+      openGoalDialog(null, g.group, { title: g.title, group: g.group, endDate: g.endDate || null, notes: g.notes || '' });
     };
     wrap.appendChild(row);
   }
