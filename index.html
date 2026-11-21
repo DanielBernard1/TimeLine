@@ -120,6 +120,17 @@
   .delmonth { font-size: 15px; background: #3a2730; border-color: #0006; color: #e9a8a8; }
   .delmonth:hover { background: #4a2a30; }
 
+  /* Today marker — low-opacity vertical bar spanning the timeline */
+  .today-bar { position: absolute; top: -40px; height: 360px; width: 3px; transform: translateX(-1.5px);
+    background: #ffffff; opacity: .14; pointer-events: none; border-radius: 2px; }
+
+  /* Goal markers on the timeline (distinct from event cards) */
+  .goal-marker { position: absolute; transform: translateX(-50%); display: flex; align-items: center; gap: 4px;
+    background: #2a2410; border: 1px solid #f5c51855; border-radius: 999px; padding: 3px 9px; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: #f5c518; white-space: nowrap; box-shadow: 0 4px 12px #0007; }
+  .goal-marker .gm-t { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  .goal-marker.past { filter: grayscale(1) brightness(.8); color: #c9c9c9; }
+
   /* NuvaRing cycle strip (world space, bottom of timeline) */
   .cycle-seg { position: absolute; border-radius: 3px; cursor: pointer; }
   .cycle-start { position: absolute; background: var(--panel-2); border: 1px solid #0006;
@@ -215,6 +226,46 @@
   .cal-task .tt { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cal-task.past { filter: grayscale(1) brightness(.78); }
   .cal-empty { color: var(--muted); padding: 24px; text-align: center; }
+
+  /* ---- Goals section ---- */
+  #goals { position: fixed; inset: 0; display: none; flex-direction: column; background: var(--bg);
+    padding-top: env(safe-area-inset-top); overflow: auto; }
+  body.goals #goals { display: flex; }
+  body.goals #viewport, body.goals #calendar, body.goals #fab, body.goals #fabMenu { display: none; }
+  #goalsbody { flex: 1; padding: 16px 16px 90px calc(16px + 44px); max-width: 720px; width: 100%; margin: 0 auto; }
+  .goal-group { margin-bottom: 22px; }
+  .goal-group h2 { font-size: 15px; color: var(--muted); font-weight: 700; letter-spacing: .4px;
+    text-transform: uppercase; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  .goal-group .addgoal { margin-left: auto; font-size: 13px; padding: 5px 10px; }
+  .goal-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--panel);
+    border: 1px solid #0007; border-left: 4px solid var(--goal, #f5c518); border-radius: 10px; margin-bottom: 8px; }
+  .goal-item .chk { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 6px; border: 2px solid #6b7483;
+    display: grid; place-items: center; cursor: pointer; font-size: 14px; color: var(--bg); background: transparent; }
+  .goal-item .chk.on { background: var(--goal, #f5c518); border-color: var(--goal, #f5c518); }
+  .goal-item .gmain { flex: 1; min-width: 0; cursor: pointer; }
+  .goal-item .gtitle { font-weight: 600; }
+  .goal-item .gmeta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .goal-item .gmiss { font-size: 12px; padding: 5px 8px; }
+  .goal-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
+
+  #goalChartBtn { position: fixed; z-index: 55; bottom: calc(18px + env(safe-area-inset-bottom));
+    right: calc(18px + env(safe-area-inset-right)); width: 56px; height: 56px; border-radius: 50%;
+    background: var(--goal, #f5c518); color: #1b212b; border: none; font-size: 24px;
+    display: none; place-items: center; box-shadow: 0 8px 22px #0008; padding: 0; }
+  body.goals #goalChartBtn { display: grid; }
+
+  /* chart / archive modal */
+  .chart-toggle { display: inline-flex; border: 1px solid #0006; border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+  .chart-toggle button { border: none; border-radius: 0; background: var(--panel-2); padding: 7px 12px; }
+  .chart-toggle button.active { background: var(--accent); color: #fff; }
+  .chart-stats { display: flex; gap: 18px; margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
+  .chart-stats b { color: var(--text); font-size: 16px; }
+  .arch-item { display: flex; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid #0005; font-size: 14px; }
+  .arch-item .tag { font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+  .arch-item .tag.hit { background: #1f3a2a; color: #7fe0a0; }
+  .arch-item .tag.missed { background: #3a2027; color: #e98ba0; }
+  .arch-item .at { flex: 1; min-width: 0; }
+  .arch-item .adate { color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -227,6 +278,7 @@
     <div class="brand">Timeline</div>
     <button class="navbtn active" id="nav_timeline"><span class="ic">▭</span> Timeline</button>
     <button class="navbtn" id="nav_calendar"><span class="ic">▦</span> Calendar</button>
+    <button class="navbtn" id="nav_goals"><span class="ic">◎</span> Goals</button>
     <div class="sep"></div>
     <button class="navbtn" id="nav_cats"><span class="ic">◉</span> Edit categories</button>
     <button class="navbtn" id="nav_fit"><span class="ic">⤢</span> Fit to start</button>
@@ -265,6 +317,13 @@
     <div id="calbody"></div>
   </div>
 
+  <!-- Goals section -->
+  <div id="goals">
+    <div id="goalsbody"></div>
+    <!-- floating button (bottom-right): open the progress chart / archive -->
+    <button id="goalChartBtn" aria-label="Progress chart">📈</button>
+  </div>
+
   <div id="scrim">
     <div class="modal" id="modal"></div>
   </div>
@@ -290,6 +349,7 @@ const CYCLE_IN_COLOR = '#f7b9d4';   // light pink — ring IN (21 days)
 const CYCLE_OUT_COLOR = '#b43d6f';  // dark pink  — ring OUT (7 days)
 const CYCLE_H = 10;                 // strip thickness (world units)
 const CYCLE_Y = AXIS_Y + BLOCK_H + 18; // y of the strip, below the range band
+const GOAL_COLOR = '#f5c518';  // single, fixed goal color (gold) — distinct from event categories
 const TODAY = startOfDay(new Date()); // real "today" (graying is live)
 const UNCATEGORIZED = { id: 'uncat', name: 'Uncategorized', color: '#8390a3' };
 
@@ -455,7 +515,7 @@ function calMaxMonth() { return new Date(CAL_HORIZON_END.getFullYear(), CAL_HORI
 /* ---- state + persistence (IndexedDB) ---- */
 const DB_NAME = 'timeline-app', STORE = 'kv', KEY = 'state';
 function freshState() {
-  return { monthCount: 5, categories: DEFAULT_CATEGORIES.map(c => ({ ...c })), events: [], ranges: [], tasks: [], cycle: null };
+  return { monthCount: 5, categories: DEFAULT_CATEGORIES.map(c => ({ ...c })), events: [], ranges: [], tasks: [], cycle: null, goals: [] };
 }
 let state = freshState();
 
@@ -484,6 +544,8 @@ function migrateState() {
   if (!Array.isArray(state.ranges)) state.ranges = [];
   if (!Array.isArray(state.tasks)) state.tasks = [];
   if (state.cycle === undefined) state.cycle = null;
+  if (!Array.isArray(state.goals)) state.goals = [];
+  for (const g of state.goals) { if (!g.status) g.status = 'active'; }
   for (const e of state.events) if (e.repeat == null) e.repeat = 'none';
   for (const r of state.ranges) if (r.repeat == null) r.repeat = 'none';
   for (const t of state.tasks) if (t.repeat == null) t.repeat = 'none';
@@ -716,8 +778,41 @@ function drawEventCard(ev, iso, x, y, cat, isBase) {
 }
 
 function renderAll() {
-  renderAxis(); renderRanges(); renderEvents(); renderCycle(); applyView();
+  renderAxis(); renderRanges(); renderEvents(); renderGoalMarkers(); renderCycle(); renderTodayBar(); applyView();
   if (currentView === 'calendar') renderCalendar();
+}
+
+/* Low-opacity vertical bar marking today's date on the timeline (if within the axis). */
+function renderTodayBar() {
+  [...nodes.querySelectorAll('.today-bar')].forEach(n => n.remove());
+  const x = dateToX(toISO(TODAY));
+  if (x === null) return;
+  const bar = document.createElement('div');
+  bar.className = 'today-bar';
+  bar.style.left = x + 'px';
+  nodes.appendChild(bar);
+}
+
+/* Goal end dates -> distinct 🎯 markers on the axis (one-way: goals -> timeline). */
+function renderGoalMarkers() {
+  [...nodes.querySelectorAll('.goal-marker')].forEach(n => n.remove());
+  for (const g of state.goals) {
+    if (g.status !== 'active' || !g.endDate) continue;
+    const ax = dateToX(g.endDate);
+    if (ax === null) continue;
+    const past = parseISO(g.endDate) < TODAY;
+    // connector from the axis up to the marker
+    edgeLayer.appendChild(line(ax, AXIS_Y, ax, AXIS_Y - 40, past ? '#6b7483' : GOAL_COLOR, 1.5, '2 3'));
+    const m = document.createElement('div');
+    m.className = 'goal-marker' + (past ? ' past' : '');
+    m.style.left = ax + 'px';
+    m.style.top = (AXIS_Y - 64) + 'px';
+    m.innerHTML = `<span class="gm-flag">🎯</span><span class="gm-t">${escapeHtml(g.title)}</span>`;
+    m.title = `Goal: ${g.title} · ${fmtDMY(g.endDate)}`;
+    m.onclick = e => { e.stopPropagation(); setView('goals'); };
+    m.onpointerdown = e => e.stopPropagation();
+    nodes.appendChild(m);
+  }
 }
 
 /* ---- NuvaRing cycle strip: thin two-color bar at the bottom of the timeline ---- */
@@ -798,7 +893,7 @@ function makeDraggable(card, ev) {
 /* ---- pan & zoom ---- */
 let panning = false, panStart;
 vp.addEventListener('pointerdown', e => {
-  if (e.target.closest('.card, .range, .addmonth, .delmonth, button')) return;
+  if (e.target.closest('.card, .range, .addmonth, .delmonth, .goal-marker, .cycle-seg, .cycle-start, button')) return;
   panning = true; vp.classList.add('panning');
   panStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
   vp.setPointerCapture(e.pointerId);
@@ -1006,6 +1101,229 @@ function openCycleDialog() {
     modal.querySelector('#f_cancel').onclick = () => openCycleDialog();
     modal.querySelector('#f_ok').onclick = () => { state.cycle = null; save(); renderAll(); closeModal(); };
   };
+}
+
+/* ============================================================================
+   Goals: two groups (short / long). Optional end date -> 🎯 marker on timeline.
+   Resolving a goal archives it and scores it (+1 hit / -1 miss). Chart = the
+   cumulative score over time; archive list = hits + misses with "try again".
+   Scoring logic verified in goals.test.mjs.
+============================================================================ */
+const GOAL_GROUPS = [ { key: 'short', label: 'Short term' }, { key: 'long', label: 'Long term' } ];
+let goalChartMode = 'chart'; // 'chart' | 'archive'
+
+// Auto-miss timed, still-active, past-due goals. Returns true if anything changed.
+function applyGoalAutoMiss() {
+  let changed = false;
+  for (const g of state.goals) {
+    if (g.status === 'active' && !g.done && g.endDate && parseISO(g.endDate) < TODAY) {
+      g.status = 'missed'; g.resolvedOn = g.endDate; changed = true;
+    }
+  }
+  return changed;
+}
+// Cumulative-score series over time from resolved goals.
+function goalScoreSeries() {
+  const resolved = state.goals.filter(g => g.status === 'hit' || g.status === 'missed')
+    .slice().sort((a, b) => a.resolvedOn < b.resolvedOn ? -1 : a.resolvedOn > b.resolvedOn ? 1 : 0);
+  let cum = 0; const pts = [];
+  for (const g of resolved) { cum += g.status === 'hit' ? 1 : -1; pts.push({ date: g.resolvedOn, score: cum, status: g.status, title: g.title }); }
+  return pts;
+}
+function goalStats() {
+  const resolved = state.goals.filter(g => g.status === 'hit' || g.status === 'missed');
+  const hits = resolved.filter(g => g.status === 'hit').length;
+  return { total: resolved.length, hits, misses: resolved.length - hits, successPct: resolved.length ? Math.round(hits / resolved.length * 100) : 0 };
+}
+
+function renderGoals() {
+  if (applyGoalAutoMiss()) save();
+  const body = document.getElementById('goalsbody');
+  body.innerHTML = '';
+  for (const grp of GOAL_GROUPS) {
+    const active = state.goals.filter(g => g.group === grp.key && g.status === 'active');
+    const wrap = document.createElement('div');
+    wrap.className = 'goal-group';
+    const h = document.createElement('h2');
+    h.innerHTML = `${grp.label} <button class="addgoal" data-add>+ Add goal</button>`;
+    wrap.appendChild(h);
+    h.querySelector('[data-add]').onclick = () => openGoalDialog(null, grp.key);
+    if (!active.length) {
+      const e = document.createElement('div'); e.className = 'goal-empty'; e.textContent = 'No goals yet.';
+      wrap.appendChild(e);
+    }
+    for (const g of active) wrap.appendChild(goalRow(g));
+    body.appendChild(wrap);
+  }
+}
+
+function goalRow(g) {
+  const row = document.createElement('div');
+  row.className = 'goal-item';
+  row.style.setProperty('--goal', GOAL_COLOR);
+  const meta = [];
+  if (g.endDate) meta.push(`🎯 ${fmtDMY(g.endDate)}`);
+  if (g.notes) meta.push(escapeHtml(g.notes));
+  row.innerHTML = `
+    <button class="chk" title="Mark done">✓</button>
+    <div class="gmain"><div class="gtitle">${escapeHtml(g.title)}</div>${meta.length ? `<div class="gmeta">${meta.join(' · ')}</div>` : ''}</div>
+    ${g.endDate ? '' : '<button class="gmiss danger" title="Mark missed">Miss</button>'}`;
+  // check done -> hit (+1), archived
+  row.querySelector('.chk').onclick = () => {
+    g.done = true; g.status = 'hit'; g.resolvedOn = toISO(TODAY);
+    save(); renderGoals(); if (currentView === 'timeline') renderAll();
+  };
+  row.querySelector('.gmain').onclick = () => openGoalDialog(g, g.group);
+  const miss = row.querySelector('.gmiss');
+  if (miss) miss.onclick = () => confirmMissGoal(g);
+  return row;
+}
+
+function confirmMissGoal(g) {
+  modal.innerHTML = `<h3>Mark goal missed?</h3>
+    <p style="color:var(--muted)">“${escapeHtml(g.title)}” will be archived as a miss (−1 on the chart). You can try again later from the archive.</p>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Mark missed</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => {
+    g.status = 'missed'; g.resolvedOn = toISO(TODAY);
+    save(); renderGoals(); closeModal();
+  };
+}
+
+function openGoalDialog(g, groupKey) {
+  const editing = !!g;
+  modal.innerHTML = `
+    <h3>${editing ? 'Edit goal' : 'New goal'}</h3>
+    <label>Title</label><input id="g_title" value="${editing ? escapeAttr(g.title) : ''}" placeholder="e.g. Finish thesis draft" />
+    <label>Group</label>
+    <select id="g_group">
+      <option value="short" ${(editing ? g.group : groupKey) === 'short' ? 'selected' : ''}>Short term</option>
+      <option value="long" ${(editing ? g.group : groupKey) === 'long' ? 'selected' : ''}>Long term</option>
+    </select>
+    <label>End date (optional — shows on the timeline)</label>
+    <input id="g_end" type="date" value="${editing && g.endDate ? g.endDate : ''}" />
+    <label>Notes (optional)</label><textarea id="g_notes">${editing ? escapeHtml(g.notes || '') : ''}</textarea>
+    <div class="actions">
+      ${editing ? '<button id="g_del" class="danger">Delete</button>' : ''}
+      <button id="g_cancel">Cancel</button>
+      <button id="g_ok" class="primary">${editing ? 'Save' : 'Create'}</button>
+    </div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#g_cancel').onclick = closeModal;
+  const del = modal.querySelector('#g_del');
+  if (del) del.onclick = () => { closeModal(); confirmDeleteGoal(g); };
+  modal.querySelector('#g_ok').onclick = () => {
+    const title = modal.querySelector('#g_title').value.trim() || 'Untitled';
+    const group = modal.querySelector('#g_group').value;
+    const endDate = modal.querySelector('#g_end').value || null;
+    const notes = modal.querySelector('#g_notes').value;
+    if (editing) { Object.assign(g, { title, group, endDate, notes }); }
+    else { state.goals.push({ id: uid(), title, group, endDate, notes, done: false, status: 'active' }); }
+    save(); renderGoals(); if (currentView === 'timeline') renderAll(); closeModal();
+  };
+}
+
+function confirmDeleteGoal(g) {
+  modal.innerHTML = `<h3>Delete goal?</h3>
+    <p style="color:var(--muted)">“${escapeHtml(g.title)}” will be removed, along with its timeline marker. This can't be undone.</p>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Delete</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => {
+    state.goals = state.goals.filter(x => x.id !== g.id);
+    save(); renderGoals(); if (currentView === 'timeline') renderAll(); closeModal();
+  };
+}
+
+/* progress chart + archive list (opened from the floating goal button) */
+function openGoalChart() {
+  applyGoalAutoMiss();
+  const st = goalStats();
+  const toggle = `
+    <div class="chart-toggle">
+      <button id="gc_chart" class="${goalChartMode === 'chart' ? 'active' : ''}">Chart</button>
+      <button id="gc_arch" class="${goalChartMode === 'archive' ? 'active' : ''}">Archive</button>
+    </div>`;
+  const statsRow = `
+    <div class="chart-stats">
+      <span>Total <b>${st.total}</b></span>
+      <span>Hits <b style="color:#7fe0a0">${st.hits}</b></span>
+      <span>Missed <b style="color:#e98ba0">${st.misses}</b></span>
+      <span>Success <b>${st.successPct}%</b></span>
+    </div>`;
+  modal.innerHTML = `<h3>Goal progress</h3>${toggle}${statsRow}<div id="gc_body"></div>
+    <div class="actions"><button id="gc_close" class="primary">Close</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#gc_close').onclick = closeModal;
+  modal.querySelector('#gc_chart').onclick = () => { goalChartMode = 'chart'; openGoalChart(); };
+  modal.querySelector('#gc_arch').onclick = () => { goalChartMode = 'archive'; openGoalChart(); };
+  const gb = modal.querySelector('#gc_body');
+  if (goalChartMode === 'chart') gb.appendChild(buildScoreChart());
+  else gb.appendChild(buildArchiveList());
+}
+
+// SVG line chart of cumulative score over time (stock-chart style).
+function buildScoreChart() {
+  const pts = goalScoreSeries();
+  const W = Math.min(modal.clientWidth || 360, 400), H = 200, PAD = 24;
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('width', '100%'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.style.display = 'block';
+  if (!pts.length) {
+    const t = document.createElementNS(svgNS, 'text');
+    t.setAttribute('x', W/2); t.setAttribute('y', H/2); t.setAttribute('fill', '#93a0b4');
+    t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '13');
+    t.textContent = 'No resolved goals yet.'; svg.appendChild(t); return svg;
+  }
+  const scores = pts.map(p => p.score);
+  const minS = Math.min(0, ...scores), maxS = Math.max(0, ...scores);
+  const span = (maxS - minS) || 1;
+  const n = pts.length;
+  const xFor = i => PAD + (n === 1 ? (W - 2*PAD)/2 : (i/(n-1)) * (W - 2*PAD));
+  const yFor = s => (H - PAD) - ((s - minS) / span) * (H - 2*PAD);
+  // zero baseline
+  const zeroY = yFor(0);
+  svg.appendChild(line(PAD, zeroY, W - PAD, zeroY, '#3a4454', 1, '3 3'));
+  // path
+  let d = '';
+  pts.forEach((p, i) => { d += (i ? 'L' : 'M') + xFor(i) + ' ' + yFor(p.score) + ' '; });
+  const path = document.createElementNS(svgNS, 'path');
+  path.setAttribute('d', d.trim()); path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', GOAL_COLOR); path.setAttribute('stroke-width', '2');
+  svg.appendChild(path);
+  // dots
+  pts.forEach((p, i) => {
+    const c = document.createElementNS(svgNS, 'circle');
+    c.setAttribute('cx', xFor(i)); c.setAttribute('cy', yFor(p.score)); c.setAttribute('r', 3.5);
+    c.setAttribute('fill', p.status === 'hit' ? '#7fe0a0' : '#e98ba0');
+    const title = document.createElementNS(svgNS, 'title');
+    title.textContent = `${p.title} · ${p.status} · ${fmtDMY(p.date)} · score ${p.score}`;
+    c.appendChild(title); svg.appendChild(c);
+  });
+  return svg;
+}
+
+function buildArchiveList() {
+  const wrap = document.createElement('div');
+  const resolved = state.goals.filter(g => g.status === 'hit' || g.status === 'missed')
+    .slice().sort((a, b) => a.resolvedOn < b.resolvedOn ? 1 : -1); // newest first
+  if (!resolved.length) { wrap.className = 'goal-empty'; wrap.textContent = 'No archived goals yet.'; return wrap; }
+  for (const g of resolved) {
+    const row = document.createElement('div');
+    row.className = 'arch-item';
+    row.innerHTML = `
+      <span class="tag ${g.status}">${g.status === 'hit' ? '+1' : '−1'}</span>
+      <span class="at"><b>${escapeHtml(g.title)}</b> <span class="adate">· ${fmtDMY(g.resolvedOn)}</span></span>
+      ${g.status === 'missed' ? '<button class="gmiss" data-retry>Try again</button>' : ''}`;
+    const retry = row.querySelector('[data-retry]');
+    if (retry) retry.onclick = () => {
+      g.status = 'active'; delete g.resolvedOn; delete g.done;
+      save(); openGoalChart(); renderGoals(); if (currentView === 'timeline') renderAll();
+    };
+    wrap.appendChild(row);
+  }
+  return wrap;
 }
 
 function openCreateTask(prefillISO) {
@@ -1256,9 +1574,12 @@ function calItemsInWindow(fromISO, toISO_) {
 function setView(v) {
   currentView = v;
   document.body.classList.toggle('calendar', v === 'calendar');
+  document.body.classList.toggle('goals', v === 'goals');
   document.getElementById('nav_timeline').classList.toggle('active', v === 'timeline');
   document.getElementById('nav_calendar').classList.toggle('active', v === 'calendar');
+  document.getElementById('nav_goals').classList.toggle('active', v === 'goals');
   if (v === 'calendar') { calAnchor = clampMonthAnchor(calAnchor); renderCalendar(); }
+  else if (v === 'goals') { renderGoals(); }
   else renderAll();
 }
 
@@ -1498,7 +1819,9 @@ drawerBackdrop.onclick = closeDrawer;
 
 document.getElementById('nav_timeline').onclick = () => { setView('timeline'); closeDrawer(); };
 document.getElementById('nav_calendar').onclick = () => { setView('calendar'); closeDrawer(); };
+document.getElementById('nav_goals').onclick = () => { setView('goals'); closeDrawer(); };
 document.getElementById('nav_cats').onclick = () => { closeDrawer(); openCategoryManager(); };
+document.getElementById('goalChartBtn').onclick = () => openGoalChart();
 document.getElementById('nav_fit').onclick = () => { closeDrawer(); setView('timeline'); fitToStart(); };
 
 /* ---- floating add button (timeline) ---- */
