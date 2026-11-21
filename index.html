@@ -109,6 +109,12 @@
   /* Month labels + controls live in world space */
   .monthlabel { position: absolute; color: var(--text); font-weight: 600; font-size: 13px;
     transform: translateX(6px); pointer-events: none; }
+  /* Sunday day-of-month numbers under the ruler ticks */
+  .sunnum { position: absolute; color: var(--muted); font-size: 10px; pointer-events: none;
+    transform: translateX(-50%); }
+  /* Daily ticks fade when zoomed far out; Sunday ticks + numbers + month lines stay */
+  .day-tick { transition: opacity .15s linear; }
+  body.zoomed-out .day-tick { opacity: 0; }
   .addmonth, .delmonth { position: absolute; width: 30px; height: 30px; border-radius: 50%; padding: 0;
     font-size: 18px; line-height: 1; display: grid; place-items: center; }
   .delmonth { font-size: 15px; background: #3a2730; border-color: #0006; color: #e9a8a8; }
@@ -503,6 +509,8 @@ function clampZoom(k) { return Math.min(2.5, Math.max(minZoom(), k)); }
 function applyView() {
   view.k = clampZoom(view.k);
   world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`;
+  // fade the thin daily ticks once they get too dense to read (zoomed out)
+  document.body.classList.toggle('zoomed-out', view.k < 0.6);
 }
 function fitToStart() {
   view.k = clampZoom(minZoom());
@@ -525,12 +533,48 @@ function line(x1,y1,x2,y2,stroke,w,dash) {
 function renderAxis() {
   axisLayer.innerHTML = '';
   const endX = axisEndX();
+  // main axis line
   axisLayer.appendChild(line(0, AXIS_Y, endX, AXIS_Y, '#cdd6e5', 2));
+
+  [...nodes.querySelectorAll('.monthlabel,.addmonth,.delmonth,.sunnum')].forEach(n => n.remove());
+
+  // Ruler ticks: a thin tick per day; a thicker, taller tick on Sundays with the
+  // day-of-month number. Day ticks fade when zoomed out (CSS, via body.zoomed-out);
+  // Sunday ticks and month boundaries never fade.
+  for (let i = 0; i < state.monthCount; i++) {
+    const { year, month } = monthOfIndex(i);
+    const dim = daysInMonth(year, month);
+    const monthX = i * MONTH_W;
+    for (let day = 1; day <= dim; day++) {
+      const x = monthX + ((day - 1) / dim) * MONTH_W;
+      const dow = new Date(year, month, day).getDay(); // 0 = Sunday
+      if (dow === 0) {
+        // Sunday: thicker, taller tick + number (always visible)
+        const t = line(x, AXIS_Y - 12, x, AXIS_Y + 12, '#aeb9ca', 1.6);
+        t.setAttribute('class', 'sun-tick');
+        axisLayer.appendChild(t);
+        const num = document.createElement('div');
+        num.className = 'sunnum';
+        num.textContent = day;
+        num.style.left = x + 'px';
+        num.style.top = (AXIS_Y + 14) + 'px';
+        nodes.appendChild(num);
+      } else if (day > 1) {
+        // ordinary day: thin short tick (fades when zoomed out); skip day 1 (month line covers it)
+        const t = line(x, AXIS_Y - 5, x, AXIS_Y + 5, '#5b6677', 0.8);
+        t.setAttribute('class', 'day-tick');
+        axisLayer.appendChild(t);
+      }
+    }
+  }
+
+  // Month boundary lines: thicker + white, always visible, drawn on top of ticks.
   for (let i = 0; i <= state.monthCount; i++) {
     const x = i * MONTH_W;
-    axisLayer.appendChild(line(x, AXIS_Y - 16, x, AXIS_Y + BLOCK_H, '#5b6677', i === 0 || i === state.monthCount ? 2 : 1));
+    axisLayer.appendChild(line(x, AXIS_Y - 18, x, AXIS_Y + BLOCK_H, '#ffffff', 2.2));
   }
-  [...nodes.querySelectorAll('.monthlabel,.addmonth,.delmonth')].forEach(n => n.remove());
+
+  // Month labels
   for (let i = 0; i < state.monthCount; i++) {
     const { year, month } = monthOfIndex(i);
     const lbl = document.createElement('div');
