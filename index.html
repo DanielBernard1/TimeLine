@@ -1241,7 +1241,7 @@ function openGoalDialog(g, groupKey, prefill) {
     <label>Notes (optional)</label><textarea id="g_notes">${src.notes ? escapeHtml(src.notes) : ''}</textarea>
     ${editing ? `<div class="actions" style="justify-content:flex-start;border-top:1px solid #0006;padding-top:12px;margin-top:14px;">
       <button id="g_done" class="primary" style="background:#1f8a4c">✓ Mark as done</button>
-      ${g.endDate ? '' : '<button id="g_miss" class="danger">Mark as missed</button>'}
+      <button id="g_miss" class="danger">✗ Mark as missed</button>
     </div>` : ''}
     <div class="actions">
       ${editing ? '<button id="g_del" class="danger">Delete</button>' : ''}
