@@ -21,12 +21,27 @@ function applyAutoMiss(goals, todayISO){
   return n;
 }
 
-// Build the cumulative-score series from resolved goals, sorted by resolvedOn.
+// Build the cumulative-score series — ONE point PER DAY (net), sorted by date.
+// Each day's point carries the running cumulative score through end of that day,
+// plus that day's hit/miss counts and net delta.
 function scoreSeries(goals){
   const resolved = goals.filter(g=>g.status==='hit'||g.status==='missed')
     .slice().sort((a,b)=> a.resolvedOn<b.resolvedOn?-1:a.resolvedOn>b.resolvedOn?1:0);
+  // aggregate per day
+  const byDay = new Map(); // iso -> {hits, misses}
+  for(const g of resolved){
+    if(!byDay.has(g.resolvedOn)) byDay.set(g.resolvedOn, {hits:0, misses:0});
+    const d = byDay.get(g.resolvedOn);
+    if(g.status==='hit') d.hits++; else d.misses++;
+  }
+  const days = [...byDay.keys()].sort();
   let cum=0; const pts=[];
-  for(const g of resolved){ cum += g.status==='hit'?1:-1; pts.push({date:g.resolvedOn, score:cum, status:g.status}); }
+  for(const iso of days){
+    const {hits, misses} = byDay.get(iso);
+    const net = hits - misses;
+    cum += net;
+    pts.push({date:iso, score:cum, hits, misses, net});
+  }
   return pts;
 }
 function stats(goals){
@@ -63,6 +78,18 @@ const g2=[
 ];
 eq('series scores', scoreSeries(g2).map(p=>p.score), [1,0,1,2]);
 eq('series dates sorted', scoreSeries(g2).map(p=>p.date), ['2026-11-05','2026-11-12','2026-11-20','2026-11-22']);
+
+// multiple resolutions on the SAME day collapse to one net point
+const gSameDay=[
+  {status:'hit', resolvedOn:'2026-11-10'},
+  {status:'hit', resolvedOn:'2026-11-10'},
+  {status:'missed', resolvedOn:'2026-11-10'},  // day net: +2-1 = +1
+  {status:'missed', resolvedOn:'2026-11-12'},  // -1 -> cum 0
+];
+eq('same-day collapses to one point/day', scoreSeries(gSameDay).map(p=>p.date),
+  ['2026-11-10','2026-11-12']);
+eq('same-day net cumulative', scoreSeries(gSameDay).map(p=>p.score), [1, 0]);
+eq('same-day counts', scoreSeries(gSameDay)[0], {date:'2026-11-10', score:1, hits:2, misses:1, net:1});
 
 // stats
 eq('stats', stats(g2), { total:4, hits:3, misses:1, successPct:75 });

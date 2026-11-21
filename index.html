@@ -1125,12 +1125,24 @@ function applyGoalAutoMiss() {
   }
   return changed;
 }
-// Cumulative-score series over time from resolved goals.
+// Cumulative-score series over time — ONE point per DAY (net). Each point carries
+// the running cumulative score through that day plus the day's hit/miss counts.
 function goalScoreSeries() {
-  const resolved = state.goals.filter(g => g.status === 'hit' || g.status === 'missed')
-    .slice().sort((a, b) => a.resolvedOn < b.resolvedOn ? -1 : a.resolvedOn > b.resolvedOn ? 1 : 0);
+  const resolved = state.goals.filter(g => g.status === 'hit' || g.status === 'missed');
+  const byDay = new Map(); // iso -> { hits, misses }
+  for (const g of resolved) {
+    if (!byDay.has(g.resolvedOn)) byDay.set(g.resolvedOn, { hits: 0, misses: 0 });
+    const d = byDay.get(g.resolvedOn);
+    if (g.status === 'hit') d.hits++; else d.misses++;
+  }
+  const days = [...byDay.keys()].sort();
   let cum = 0; const pts = [];
-  for (const g of resolved) { cum += g.status === 'hit' ? 1 : -1; pts.push({ date: g.resolvedOn, score: cum, status: g.status, title: g.title }); }
+  for (const iso of days) {
+    const { hits, misses } = byDay.get(iso);
+    const net = hits - misses;
+    cum += net;
+    pts.push({ date: iso, score: cum, hits, misses, net });
+  }
   return pts;
 }
 function goalStats() {
@@ -1358,14 +1370,18 @@ function buildScoreChart() {
   path.setAttribute('stroke', GOAL_COLOR); path.setAttribute('stroke-width', '2');
   svg.appendChild(path);
 
-  // --- points + per-point date timestamp (rotated under the X axis) ---
+  // --- one point per day + per-point date timestamp (rotated under the X axis) ---
   pts.forEach((p, i) => {
     const px = xFor(i);
     const c = document.createElementNS(svgNS, 'circle');
     c.setAttribute('cx', px); c.setAttribute('cy', yFor(p.score)); c.setAttribute('r', 3.5);
-    c.setAttribute('fill', p.status === 'hit' ? '#7fe0a0' : '#e98ba0');
+    c.setAttribute('fill', GOAL_COLOR); // single neutral color (no per-day hit/miss distinction)
+    const parts = [];
+    if (p.hits) parts.push(`${p.hits} hit${p.hits > 1 ? 's' : ''}`);
+    if (p.misses) parts.push(`${p.misses} miss${p.misses > 1 ? 'es' : ''}`);
+    const net = (p.net > 0 ? '+' : '') + p.net;
     const title = document.createElementNS(svgNS, 'title');
-    title.textContent = `${p.title} · ${p.status} · ${fmtDMY(p.date)} · ${p.score} pts`;
+    title.textContent = `${fmtDMY(p.date)} · ${parts.join(', ')} · ${net} · ${p.score} pts`;
     c.appendChild(title); svg.appendChild(c);
     // tick + rotated date label on the X axis
     svg.appendChild(line(px, axisY, px, axisY + 4, '#4a5568', 1));
