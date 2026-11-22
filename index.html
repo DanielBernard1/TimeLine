@@ -280,10 +280,16 @@
     padding-top: env(safe-area-inset-top); overflow: auto; }
   body.todos #todos { display: flex; }
   body.todos #viewport, body.todos #calendar, body.todos #goals, body.todos #fab, body.todos #fabMenu { display: none; }
-  #todosbody { flex: 1; padding: 14px 14px 90px calc(14px + 44px); max-width: 860px; width: 100%; margin: 0 auto; }
+  #todosbody { flex: 1; padding: 14px 14px 90px calc(14px + 44px); max-width: 860px; width: 100%; margin: 0 auto;
+    display: flex; flex-direction: column; }
   .matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .quad { background: var(--panel); border: 1px solid #0007; border-radius: 12px; padding: 10px; min-height: 120px;
-    border-top: 3px solid var(--qc, #4f8cff); }
+    border-top: 3px solid var(--qc, #4f8cff); overflow: auto; }
+  /* Portrait: let the matrix grow to fill the screen height (tall quadrants). */
+  @media (orientation: portrait) {
+    #todos { overflow: hidden; }
+    .matrix { flex: 1; grid-auto-rows: 1fr; min-height: 0; }
+  }
   .quad h3 { margin: 0 0 2px; font-size: 14px; }
   .quad .qsub { color: var(--muted); font-size: 11px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
   .quad .qmult { margin-left: auto; font-weight: 700; color: var(--qc, #4f8cff); }
@@ -315,6 +321,7 @@
     <button class="navbtn" id="nav_todos"><span class="ic">▤</span> To-do</button>
     <div class="sep"></div>
     <button class="navbtn" id="nav_cats"><span class="ic">◉</span> Edit categories</button>
+    <button class="navbtn" id="nav_sync"><span class="ic">⟳</span> Sync &amp; backup</button>
     <button class="navbtn" id="nav_fit"><span class="ic">⤢</span> Fit to start</button>
     <div class="grow"></div>
   </nav>
@@ -595,6 +602,7 @@ function migrateState() {
 }
 let saveTimer = null;
 function save() {
+  state.updatedAt = new Date().toISOString(); // drives sync last-write-wins
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
@@ -604,6 +612,24 @@ function save() {
   }, 150);
 }
 const uid = () => Math.random().toString(36).slice(2, 9);
+
+/* ---- sync settings (Supabase URL + anon key), stored locally, NOT part of state ---- */
+const SETTINGS_KEY = 'settings';
+let settings = { supabaseUrl: '', supabaseKey: '' };
+async function loadSettings() {
+  try {
+    const db = await openDB();
+    const v = await new Promise((res, rej) => {
+      const tx = db.transaction(STORE, 'readonly').objectStore(STORE).get(SETTINGS_KEY);
+      tx.onsuccess = () => res(tx.result); tx.onerror = () => rej(tx.error);
+    });
+    if (v) settings = { ...settings, ...v };
+  } catch (e) { console.warn('settings load failed', e); }
+}
+function saveSettings() {
+  openDB().then(db => db.transaction(STORE, 'readwrite').objectStore(STORE).put(settings, SETTINGS_KEY))
+    .catch(e => console.warn('settings save failed', e));
+}
 
 /* ---- view transform (pan/zoom) ---- */
 const vp = document.getElementById('viewport');
@@ -2172,6 +2198,7 @@ document.getElementById('nav_calendar').onclick = () => { setView('calendar'); c
 document.getElementById('nav_goals').onclick = () => { setView('goals'); closeDrawer(); };
 document.getElementById('nav_todos').onclick = () => { setView('todos'); closeDrawer(); };
 document.getElementById('nav_cats').onclick = () => { closeDrawer(); openCategoryManager(); };
+document.getElementById('nav_sync').onclick = () => { closeDrawer(); openSyncSettings(); };
 document.getElementById('goalChartBtn').onclick = () => openGoalChart();
 document.getElementById('todoChartBtn').onclick = () => openTodoChart();
 document.getElementById('nav_fit').onclick = () => { closeDrawer(); setView('timeline'); fitToStart(); };
@@ -2217,9 +2244,142 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+/* ============================================================================
+   Sync (Supabase) + Export/Import backup.
+   Whole-dataset last-write-wins: compare local state.updatedAt vs the server
+   row's updated_at; the newer side overwrites the older. Zero-dependency (fetch
+   to Supabase REST). Settings (URL + anon key) live in IndexedDB, per device,
+   and are never part of the synced state.
+============================================================================ */
+function normalizeSupabaseBase(url) {
+  // accept either the project URL or the ".../rest/v1/" form; return the origin
+  let u = (url || '').trim().replace(/\/+$/, '');
+  u = u.replace(/\/rest\/v1$/, '');
+  return u;
+}
+function supabaseConfigured() { return !!(settings.supabaseUrl && settings.supabaseKey); }
+
+async function supabaseGet() {
+  const base = normalizeSupabaseBase(settings.supabaseUrl);
+  const res = await fetch(`${base}/rest/v1/dataset?id=eq.1&select=data,updated_at`, {
+    headers: { apikey: settings.supabaseKey, Authorization: `Bearer ${settings.supabaseKey}` },
+  });
+  if (!res.ok) throw new Error(`server ${res.status}`);
+  const rows = await res.json();
+  return rows && rows[0] ? rows[0] : null; // { data, updated_at } | null
+}
+async function supabasePut(stateObj) {
+  const base = normalizeSupabaseBase(settings.supabaseUrl);
+  const body = [{ id: 1, data: stateObj, updated_at: stateObj.updatedAt || new Date().toISOString() }];
+  const res = await fetch(`${base}/rest/v1/dataset?on_conflict=id`, {
+    method: 'POST',
+    headers: {
+      apikey: settings.supabaseKey, Authorization: `Bearer ${settings.supabaseKey}`,
+      'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`server ${res.status}`);
+}
+
+async function doSync(statusEl) {
+  const setMsg = (m, err) => { if (statusEl) { statusEl.textContent = m; statusEl.style.color = err ? '#e98ba0' : '#7fe0a0'; } };
+  if (!supabaseConfigured()) { setMsg('Add your Supabase URL and key first.', true); return; }
+  setMsg('Syncing…');
+  try {
+    const remote = await supabaseGet();
+    const localTime = state.updatedAt || '';
+    const remoteTime = remote ? remote.updated_at : '';
+    if (!remote || localTime > remoteTime) {
+      await supabasePut(state);
+      setMsg('Pushed local data to the cloud. ✓');
+    } else if (remoteTime > localTime) {
+      const incoming = remote.data || {};
+      state = incoming; migrateState();
+      // persist locally WITHOUT bumping updatedAt (keep the server's timestamp)
+      state.updatedAt = remote.updated_at;
+      try { const db = await openDB(); db.transaction(STORE, 'readwrite').objectStore(STORE).put(state, KEY); } catch (e) { console.warn(e); }
+      renderAll(); if (currentView === 'goals') renderGoals(); if (currentView === 'todos') renderTodos();
+      setMsg('Pulled newer data from the cloud. ✓');
+    } else {
+      setMsg('Already in sync. ✓');
+    }
+  } catch (e) {
+    setMsg('Sync failed: ' + e.message + ' (check URL/key and connection).', true);
+  }
+}
+
+function openSyncSettings() {
+  const base = normalizeSupabaseBase(settings.supabaseUrl);
+  modal.innerHTML = `
+    <h3>Sync &amp; backup</h3>
+    <p style="color:var(--muted);font-size:13px">Sync your data across devices via Supabase (whole-dataset, newer wins). Enter the same URL + key on each device.</p>
+    <label>Supabase project URL</label>
+    <input id="s_url" placeholder="https://xxxx.supabase.co" value="${escapeAttr(settings.supabaseUrl || '')}" />
+    <label>Supabase anon key</label>
+    <input id="s_key" type="password" placeholder="eyJ…" value="${escapeAttr(settings.supabaseKey || '')}" />
+    <div class="actions" style="justify-content:space-between">
+      <button id="s_save">Save keys</button>
+      <button id="s_sync" class="primary">Sync now</button>
+    </div>
+    <div id="s_status" style="font-size:13px;margin-top:6px;min-height:18px"></div>
+    <div style="border-top:1px solid #0006;margin:14px 0 10px"></div>
+    <p style="color:var(--muted);font-size:13px">Local backup — a file on this device, no account needed.</p>
+    <div class="actions" style="justify-content:space-between">
+      <button id="s_export">Export to file</button>
+      <button id="s_import">Import from file</button>
+    </div>
+    <input id="s_file" type="file" accept="application/json,.json" style="display:none" />
+    <div class="actions"><button id="s_close" class="primary">Close</button></div>`;
+  scrim.classList.add('show');
+  const statusEl = modal.querySelector('#s_status');
+  modal.querySelector('#s_close').onclick = closeModal;
+  modal.querySelector('#s_save').onclick = () => {
+    settings.supabaseUrl = modal.querySelector('#s_url').value.trim();
+    settings.supabaseKey = modal.querySelector('#s_key').value.trim();
+    saveSettings();
+    statusEl.textContent = 'Saved on this device. ✓'; statusEl.style.color = '#7fe0a0';
+  };
+  modal.querySelector('#s_sync').onclick = () => {
+    settings.supabaseUrl = modal.querySelector('#s_url').value.trim();
+    settings.supabaseKey = modal.querySelector('#s_key').value.trim();
+    saveSettings();
+    doSync(statusEl);
+  };
+  modal.querySelector('#s_export').onclick = () => exportBackup();
+  const fileInput = modal.querySelector('#s_file');
+  modal.querySelector('#s_import').onclick = () => fileInput.click();
+  fileInput.onchange = () => { if (fileInput.files[0]) importBackup(fileInput.files[0], statusEl); };
+}
+
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `timeline-backup-${toISO(new Date())}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function importBackup(file, statusEl) {
+  const setMsg = (m, err) => { if (statusEl) { statusEl.textContent = m; statusEl.style.color = err ? '#e98ba0' : '#7fe0a0'; } };
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const obj = JSON.parse(reader.result);
+      if (!obj || typeof obj !== 'object' || !('monthCount' in obj)) throw new Error('not a valid backup');
+      state = obj; migrateState(); save();
+      renderAll(); if (currentView === 'goals') renderGoals(); if (currentView === 'todos') renderTodos();
+      setMsg('Imported backup. ✓');
+    } catch (e) { setMsg('Import failed: ' + e.message, true); }
+  };
+  reader.onerror = () => setMsg('Could not read the file.', true);
+  reader.readAsText(file);
+}
+
 /* ---- boot ---- */
 (async function main() {
   await loadState();
+  await loadSettings();
   seedIfEmpty();
   view.k = clampZoom(Math.max(minZoom(), 0.6));
   renderAll();
