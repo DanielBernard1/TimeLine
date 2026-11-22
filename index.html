@@ -2286,6 +2286,46 @@ async function supabasePut(stateObj) {
   if (!res.ok) throw new Error(`server ${res.status}`);
 }
 
+// Does a state object hold meaningful user data? (vs empty/seed)
+function hasRealData(s) {
+  if (!s || typeof s !== 'object') return false;
+  const n = (s.events||[]).length + (s.ranges||[]).length + (s.tasks||[]).length
+          + (s.goals||[]).length + (s.todos||[]).length;
+  return n > 0 || !!(s.cycle && s.cycle.start);
+}
+
+// Snapshot the current local state before any overwrite, so there's always an undo.
+const SNAPSHOT_KEY = 'preSyncSnapshot';
+let lastSnapshot = null;
+async function snapshotLocal() {
+  lastSnapshot = JSON.parse(JSON.stringify(state));
+  try { const db = await openDB(); db.transaction(STORE, 'readwrite').objectStore(STORE).put(lastSnapshot, SNAPSHOT_KEY); } catch (e) { console.warn(e); }
+}
+async function restoreSnapshot(statusEl) {
+  let snap = lastSnapshot;
+  if (!snap) { try { const db = await openDB(); snap = await new Promise((res,rej)=>{const t=db.transaction(STORE,'readonly').objectStore(STORE).get(SNAPSHOT_KEY);t.onsuccess=()=>res(t.result);t.onerror=()=>rej(t.error);}); } catch (e) {} }
+  if (!snap) { if (statusEl){statusEl.textContent='Nothing to undo.';statusEl.style.color='#e98ba0';} return; }
+  state = snap; migrateState(); save();
+  renderAll(); if (currentView === 'goals') renderGoals(); if (currentView === 'todos') renderTodos();
+  if (statusEl){statusEl.textContent='Reverted to the pre-sync data. ✓';statusEl.style.color='#7fe0a0';}
+}
+
+async function applyPull(remote, statusEl) {
+  await snapshotLocal(); // safeguard 3: snapshot before overwriting
+  const incoming = remote.data || {};
+  state = incoming; migrateState();
+  state.updatedAt = remote.updated_at; // keep the server's timestamp
+  try { const db = await openDB(); db.transaction(STORE, 'readwrite').objectStore(STORE).put(state, KEY); } catch (e) { console.warn(e); }
+  renderAll(); if (currentView === 'goals') renderGoals(); if (currentView === 'todos') renderTodos();
+  if (statusEl) {
+    statusEl.innerHTML = 'Pulled newer data from the cloud. ✓ ';
+    const undo = document.createElement('button');
+    undo.textContent = 'Undo'; undo.style.cssText = 'padding:3px 8px;font-size:12px;margin-left:6px;';
+    undo.onclick = () => restoreSnapshot(statusEl);
+    statusEl.style.color = '#7fe0a0'; statusEl.appendChild(undo);
+  }
+}
+
 async function doSync(statusEl) {
   const setMsg = (m, err) => { if (statusEl) { statusEl.textContent = m; statusEl.style.color = err ? '#e98ba0' : '#7fe0a0'; } };
   if (!supabaseConfigured()) { setMsg('Add your Supabase URL and key first.', true); return; }
@@ -2294,23 +2334,56 @@ async function doSync(statusEl) {
     const remote = await supabaseGet();
     const localTime = state.updatedAt || '';
     const remoteTime = remote ? remote.updated_at : '';
-    if (!remote || localTime > remoteTime) {
-      await supabasePut(state);
-      setMsg('Pushed local data to the cloud. ✓');
-    } else if (remoteTime > localTime) {
-      const incoming = remote.data || {};
-      state = incoming; migrateState();
-      // persist locally WITHOUT bumping updatedAt (keep the server's timestamp)
-      state.updatedAt = remote.updated_at;
-      try { const db = await openDB(); db.transaction(STORE, 'readwrite').objectStore(STORE).put(state, KEY); } catch (e) { console.warn(e); }
-      renderAll(); if (currentView === 'goals') renderGoals(); if (currentView === 'todos') renderTodos();
-      setMsg('Pulled newer data from the cloud. ✓');
-    } else {
-      setMsg('Already in sync. ✓');
+
+    // No remote, or local is newer -> push.
+    if (!remote || localTime > remoteTime) { await supabasePut(state); setMsg('Pushed local data to the cloud. ✓'); return; }
+
+    if (remoteTime > localTime) {
+      const remoteReal = hasRealData(remote.data);
+      const localReal = hasRealData(state);
+      // Safeguard 1: never let an empty/seed cloud copy overwrite real local data.
+      if (!remoteReal && localReal) {
+        setMsg('Cloud copy is empty but this device has data — skipped the overwrite. Tap "Push to cloud" to upload this device instead.', true);
+        return;
+      }
+      // Safeguard 2: confirm before replacing non-empty local data.
+      if (localReal) {
+        confirmPull(remote, localTime, remoteTime, statusEl);
+        return;
+      }
+      // local is empty -> safe to pull without asking
+      await applyPull(remote, statusEl);
+      return;
     }
+    setMsg('Already in sync. ✓');
   } catch (e) {
     setMsg('Sync failed: ' + e.message + ' (check URL/key and connection).', true);
   }
+}
+
+function confirmPull(remote, localTime, remoteTime, statusEl) {
+  const fmt = t => { try { return new Date(t).toLocaleString(); } catch { return t || '—'; } };
+  modal.innerHTML = `<h3>Replace this device's data?</h3>
+    <p style="color:var(--muted);font-size:13px">The cloud copy is newer. Pulling will <b>overwrite this device</b> with the cloud data. A snapshot is saved so you can undo.</p>
+    <div style="font-size:13px;margin:10px 0;line-height:1.7">
+      ↓ Cloud (newer): <b>${fmt(remoteTime)}</b><br>
+      ● This device: <b>${fmt(localTime)}</b>
+    </div>
+    <div class="actions">
+      <button id="cp_push" class="danger" title="Upload this device instead">Push this device ↑</button>
+      <button id="cp_cancel">Cancel</button>
+      <button id="cp_pull" class="primary">Pull &amp; overwrite ↓</button>
+    </div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#cp_cancel').onclick = () => { closeModal(); openSyncSettings(); };
+  modal.querySelector('#cp_pull').onclick = async () => { closeModal(); openSyncSettings(); await applyPull(remote, document.querySelector('#s_status')); };
+  modal.querySelector('#cp_push').onclick = async () => {
+    closeModal(); openSyncSettings();
+    const el = document.querySelector('#s_status');
+    try { state.updatedAt = new Date().toISOString(); await supabasePut(state); save();
+      if (el){el.textContent='Pushed this device to the cloud. ✓';el.style.color='#7fe0a0';}
+    } catch (e) { if (el){el.textContent='Push failed: '+e.message;el.style.color='#e98ba0';} }
+  };
 }
 
 function openSyncSettings() {
@@ -2325,6 +2398,10 @@ function openSyncSettings() {
     <div class="actions" style="justify-content:space-between">
       <button id="s_save">Save keys</button>
       <button id="s_sync" class="primary">Sync now</button>
+    </div>
+    <div class="actions" style="justify-content:space-between;margin-top:0">
+      <button id="s_push" title="Upload this device, overwriting the cloud">Push this device ↑</button>
+      <button id="s_pull" title="Download the cloud, overwriting this device">Pull from cloud ↓</button>
     </div>
     <div id="s_status" style="font-size:13px;margin-top:6px;min-height:18px"></div>
     <div style="border-top:1px solid #0006;margin:14px 0 10px"></div>
@@ -2344,11 +2421,29 @@ function openSyncSettings() {
     saveSettings();
     statusEl.textContent = 'Saved on this device. ✓'; statusEl.style.color = '#7fe0a0';
   };
-  modal.querySelector('#s_sync').onclick = () => {
+  const grabKeys = () => {
     settings.supabaseUrl = modal.querySelector('#s_url').value.trim();
     settings.supabaseKey = modal.querySelector('#s_key').value.trim();
     saveSettings();
-    doSync(statusEl);
+  };
+  modal.querySelector('#s_sync').onclick = () => { grabKeys(); doSync(statusEl); };
+  modal.querySelector('#s_push').onclick = async () => {
+    grabKeys();
+    if (!supabaseConfigured()) { statusEl.textContent = 'Add your Supabase URL and key first.'; statusEl.style.color = '#e98ba0'; return; }
+    statusEl.textContent = 'Pushing…'; statusEl.style.color = '';
+    try { state.updatedAt = new Date().toISOString(); await supabasePut(state); save();
+      statusEl.textContent = 'Pushed this device to the cloud. ✓'; statusEl.style.color = '#7fe0a0';
+    } catch (e) { statusEl.textContent = 'Push failed: ' + e.message; statusEl.style.color = '#e98ba0'; }
+  };
+  modal.querySelector('#s_pull').onclick = async () => {
+    grabKeys();
+    if (!supabaseConfigured()) { statusEl.textContent = 'Add your Supabase URL and key first.'; statusEl.style.color = '#e98ba0'; return; }
+    statusEl.textContent = 'Pulling…'; statusEl.style.color = '';
+    try {
+      const remote = await supabaseGet();
+      if (!remote) { statusEl.textContent = 'Nothing in the cloud yet.'; statusEl.style.color = '#e98ba0'; return; }
+      await applyPull(remote, statusEl);
+    } catch (e) { statusEl.textContent = 'Pull failed: ' + e.message; statusEl.style.color = '#e98ba0'; }
   };
   modal.querySelector('#s_export').onclick = () => exportBackup();
   const fileInput = modal.querySelector('#s_file');
