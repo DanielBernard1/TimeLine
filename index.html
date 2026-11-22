@@ -153,6 +153,11 @@
   .modal textarea { resize: vertical; min-height: 70px; }
   .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
   .modal .warn { background: #3a2a1f; border: 1px solid #7a5a2a; color: #f0c98a; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  /* segmented toggle (used by the to-do urgency/importance pickers) */
+  .modal .seg { display: flex; gap: 0; border: 1px solid #0006; border-radius: 8px; overflow: hidden; }
+  .modal .seg button { flex: 1; border: none; border-radius: 0; background: var(--panel-2); padding: 9px 8px; font-size: 13px; }
+  .modal .seg button + button { border-left: 1px solid #0006; }
+  .modal .seg button.on { background: var(--accent); color: #fff; }
 
   /* Category manager rows */
   .catrow { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #0005; }
@@ -269,6 +274,31 @@
   .arch-item .tag.missed { background: #3a2027; color: #e98ba0; }
   .arch-item .at { flex: 1; min-width: 0; }
   .arch-item .adate { color: var(--muted); font-size: 12px; }
+
+  /* ---- To-do section (Eisenhower matrix) ---- */
+  #todos { position: fixed; inset: 0; display: none; flex-direction: column; background: var(--bg);
+    padding-top: env(safe-area-inset-top); overflow: auto; }
+  body.todos #todos { display: flex; }
+  body.todos #viewport, body.todos #calendar, body.todos #goals, body.todos #fab, body.todos #fabMenu { display: none; }
+  #todosbody { flex: 1; padding: 14px 14px 90px calc(14px + 44px); max-width: 860px; width: 100%; margin: 0 auto; }
+  .matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .quad { background: var(--panel); border: 1px solid #0007; border-radius: 12px; padding: 10px; min-height: 120px;
+    border-top: 3px solid var(--qc, #4f8cff); }
+  .quad h3 { margin: 0 0 2px; font-size: 14px; }
+  .quad .qsub { color: var(--muted); font-size: 11px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .quad .qmult { margin-left: auto; font-weight: 700; color: var(--qc, #4f8cff); }
+  .quad .addtodo { font-size: 12px; padding: 4px 8px; margin-top: 6px; }
+  .todo-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel-2);
+    border: 1px solid #0006; border-left: 3px solid var(--qc, #4f8cff); border-radius: 8px; margin-bottom: 6px; cursor: pointer; }
+  .todo-item .tt { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+  .todo-item .tmeta { color: var(--muted); font-size: 11px; }
+  .todo-item .gchev { color: var(--muted); font-size: 16px; }
+  .quad .qempty { color: var(--muted); font-size: 12px; padding: 4px 2px; }
+  #todoChartBtn { position: fixed; z-index: 55; bottom: calc(18px + env(safe-area-inset-bottom));
+    right: calc(18px + env(safe-area-inset-right)); width: 56px; height: 56px; border-radius: 50%;
+    background: var(--accent); color: #fff; border: none; font-size: 24px; display: none; place-items: center;
+    box-shadow: 0 8px 22px #0008; padding: 0; }
+  body.todos #todoChartBtn { display: grid; }
 </style>
 </head>
 <body>
@@ -282,6 +312,7 @@
     <button class="navbtn active" id="nav_timeline"><span class="ic">▭</span> Timeline</button>
     <button class="navbtn" id="nav_calendar"><span class="ic">▦</span> Calendar</button>
     <button class="navbtn" id="nav_goals"><span class="ic">◎</span> Goals</button>
+    <button class="navbtn" id="nav_todos"><span class="ic">▤</span> To-do</button>
     <div class="sep"></div>
     <button class="navbtn" id="nav_cats"><span class="ic">◉</span> Edit categories</button>
     <button class="navbtn" id="nav_fit"><span class="ic">⤢</span> Fit to start</button>
@@ -327,6 +358,12 @@
     <button id="goalChartBtn" aria-label="Progress chart">📈</button>
   </div>
 
+  <!-- To-do section (Eisenhower matrix) -->
+  <div id="todos">
+    <div id="todosbody"></div>
+    <button id="todoChartBtn" aria-label="Progress chart">📈</button>
+  </div>
+
   <div id="scrim">
     <div class="modal" id="modal"></div>
   </div>
@@ -353,6 +390,7 @@ const CYCLE_OUT_COLOR = '#b43d6f';  // dark pink  — ring OUT (7 days)
 const CYCLE_H = 10;                 // strip thickness (world units)
 const CYCLE_Y = AXIS_Y + BLOCK_H + 18; // y of the strip, below the range band
 const GOAL_COLOR = '#f5c518';  // single, fixed goal color (gold) — distinct from event categories
+const TODO_COLOR = '#4f8cff';  // to-do accent color (blue)
 const TODAY = startOfDay(new Date()); // real "today" (graying is live)
 const UNCATEGORIZED = { id: 'uncat', name: 'Uncategorized', color: '#8390a3' };
 
@@ -518,7 +556,7 @@ function calMaxMonth() { return new Date(CAL_HORIZON_END.getFullYear(), CAL_HORI
 /* ---- state + persistence (IndexedDB) ---- */
 const DB_NAME = 'timeline-app', STORE = 'kv', KEY = 'state';
 function freshState() {
-  return { monthCount: 5, categories: DEFAULT_CATEGORIES.map(c => ({ ...c })), events: [], ranges: [], tasks: [], cycle: null, goals: [] };
+  return { monthCount: 5, categories: DEFAULT_CATEGORIES.map(c => ({ ...c })), events: [], ranges: [], tasks: [], cycle: null, goals: [], todos: [] };
 }
 let state = freshState();
 
@@ -549,6 +587,8 @@ function migrateState() {
   if (state.cycle === undefined) state.cycle = null;
   if (!Array.isArray(state.goals)) state.goals = [];
   for (const g of state.goals) { if (!g.status) g.status = 'active'; }
+  if (!Array.isArray(state.todos)) state.todos = [];
+  for (const t of state.todos) { if (!t.status) t.status = 'active'; }
   for (const e of state.events) if (e.repeat == null) e.repeat = 'none';
   for (const r of state.ranges) if (r.repeat == null) r.repeat = 'none';
   for (const t of state.tasks) if (t.repeat == null) t.repeat = 'none';
@@ -1319,8 +1359,8 @@ function openGoalChart() {
 
 // SVG line chart of cumulative score over time (stock-chart style) with
 // annotated axes: Y = points (integer gridlines), X = time (a date under each point).
-function buildScoreChart() {
-  const pts = goalScoreSeries();
+function buildScoreChart() { return buildScoreChartFrom(goalScoreSeries(), GOAL_COLOR); }
+function buildScoreChartFrom(pts, accent) {
   const W = Math.min(modal.clientWidth || 360, 420), H = 240;
   const L = 34, R = 12, T = 12, B = 58; // margins: left (y labels), bottom (x dates)
   const svg = document.createElementNS(svgNS, 'svg');
@@ -1367,7 +1407,7 @@ function buildScoreChart() {
   pts.forEach((p, i) => { d += (i ? 'L' : 'M') + xFor(i) + ' ' + yFor(p.score) + ' '; });
   const path = document.createElementNS(svgNS, 'path');
   path.setAttribute('d', d.trim()); path.setAttribute('fill', 'none');
-  path.setAttribute('stroke', GOAL_COLOR); path.setAttribute('stroke-width', '2');
+  path.setAttribute('stroke', accent); path.setAttribute('stroke-width', '2');
   svg.appendChild(path);
 
   // --- one point per day + per-point date timestamp (rotated under the X axis) ---
@@ -1375,7 +1415,7 @@ function buildScoreChart() {
     const px = xFor(i);
     const c = document.createElementNS(svgNS, 'circle');
     c.setAttribute('cx', px); c.setAttribute('cy', yFor(p.score)); c.setAttribute('r', 3.5);
-    c.setAttribute('fill', GOAL_COLOR); // single neutral color (no per-day hit/miss distinction)
+    c.setAttribute('fill', accent); // single neutral color (no per-day hit/miss distinction)
     const parts = [];
     if (p.hits) parts.push(`${p.hits} hit${p.hits > 1 ? 's' : ''}`);
     if (p.misses) parts.push(`${p.misses} miss${p.misses > 1 ? 'es' : ''}`);
@@ -1409,6 +1449,225 @@ function buildArchiveList() {
       closeModal();
       openGoalDialog(null, g.group, { title: g.title, group: g.group, endDate: g.endDate || null, notes: g.notes || '' });
     };
+    wrap.appendChild(row);
+  }
+  return wrap;
+}
+
+/* ============================================================================
+   To-do: Eisenhower matrix (urgent/not × important/not). Same resolve system as
+   goals, but points are WEIGHTED: weight = (urgent?2:1) * (important?3:1), locked
+   at resolution. hit = +weight, miss = -weight. Own chart/archive/score, no
+   timeline interaction. Weighted scoring verified in todos.test.mjs.
+============================================================================ */
+const TODO_QUADS = [
+  { u: true,  i: true,  label: 'Urgent & Important',     sub: 'do now',      mult: 6 },
+  { u: false, i: true,  label: 'Important, Not urgent',  sub: 'schedule',    mult: 3 },
+  { u: true,  i: false, label: 'Urgent, Not important',  sub: 'delegate',    mult: 2 },
+  { u: false, i: false, label: 'Not urgent/important',   sub: 'low priority', mult: 1 },
+];
+let todoChartMode = 'chart';
+function todoWeight(t) { return (t.urgent ? 2 : 1) * (t.important ? 3 : 1); }
+
+function applyTodoAutoMiss() {
+  let changed = false;
+  for (const t of state.todos) {
+    if (t.status === 'active' && !t.done && t.endDate && parseISO(t.endDate) < TODAY) {
+      t.status = 'missed'; t.resolvedOn = t.endDate; t.weight = todoWeight(t); changed = true;
+    }
+  }
+  return changed;
+}
+function todoScoreSeries() {
+  const resolved = state.todos.filter(t => t.status === 'hit' || t.status === 'missed');
+  const byDay = new Map();
+  for (const t of resolved) {
+    const w = t.weight != null ? t.weight : todoWeight(t);
+    const delta = t.status === 'hit' ? w : -w;
+    const cur = byDay.get(t.resolvedOn) || { delta: 0, hits: 0, misses: 0 };
+    cur.delta += delta; if (t.status === 'hit') cur.hits++; else cur.misses++;
+    byDay.set(t.resolvedOn, cur);
+  }
+  const days = [...byDay.keys()].sort();
+  let cum = 0; const pts = [];
+  for (const iso of days) { const d = byDay.get(iso); cum += d.delta; pts.push({ date: iso, score: cum, hits: d.hits, misses: d.misses, net: d.delta }); }
+  return pts;
+}
+function todoStats() {
+  const resolved = state.todos.filter(t => t.status === 'hit' || t.status === 'missed');
+  const hits = resolved.filter(t => t.status === 'hit').length;
+  return { total: resolved.length, hits, misses: resolved.length - hits, successPct: resolved.length ? Math.round(hits / resolved.length * 100) : 0 };
+}
+
+function renderTodos() {
+  if (applyTodoAutoMiss()) save();
+  const body = document.getElementById('todosbody');
+  body.innerHTML = '';
+  const matrix = document.createElement('div');
+  matrix.className = 'matrix';
+  for (const q of TODO_QUADS) {
+    const items = state.todos.filter(t => t.status === 'active' && !!t.urgent === q.u && !!t.important === q.i);
+    const cell = document.createElement('div');
+    cell.className = 'quad';
+    cell.style.setProperty('--qc', TODO_COLOR);
+    cell.innerHTML = `<h3>${q.label}</h3><div class="qsub">${q.sub}<span class="qmult">×${q.mult}</span></div>`;
+    if (!items.length) { const e = document.createElement('div'); e.className = 'qempty'; e.textContent = 'Empty.'; cell.appendChild(e); }
+    for (const t of items) cell.appendChild(todoRow(t));
+    const add = document.createElement('button');
+    add.className = 'addtodo'; add.textContent = '+ Add';
+    add.onclick = () => openTodoDialog(null, { urgent: q.u, important: q.i });
+    cell.appendChild(add);
+    matrix.appendChild(cell);
+  }
+  body.appendChild(matrix);
+  // reset (testing)
+  const resetWrap = document.createElement('div');
+  resetWrap.style.cssText = 'margin-top:24px;padding-top:14px;border-top:1px solid #0006;';
+  const rb = document.createElement('button');
+  rb.className = 'danger'; rb.textContent = 'Reset to-dos…';
+  rb.onclick = confirmResetTodos;
+  resetWrap.appendChild(rb);
+  body.appendChild(resetWrap);
+}
+
+function todoRow(t) {
+  const row = document.createElement('div');
+  row.className = 'todo-item';
+  row.style.setProperty('--qc', TODO_COLOR);
+  const meta = [];
+  if (t.endDate) meta.push(`⏱ ${fmtDMY(t.endDate)}`);
+  meta.push(`×${todoWeight(t)}`);
+  row.innerHTML = `<div class="tt">${escapeHtml(t.title)}<div class="tmeta">${meta.join(' · ')}</div></div><span class="gchev">›</span>`;
+  row.onclick = () => openTodoDialog(t);
+  return row;
+}
+
+function confirmResetTodos() {
+  modal.innerHTML = `<h3>Reset all to-dos?</h3>
+    <p style="color:var(--muted)">Deletes every to-do — active and archived — and clears its progress chart. This can't be undone.</p>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Reset to-dos</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => { state.todos = []; save(); renderTodos(); closeModal(); };
+}
+
+// t: existing to-do to edit (or null). seed: {urgent, important} for a new one.
+// prefill: values for a "try again" copy.
+function openTodoDialog(t, seed, prefill) {
+  const editing = !!t;
+  const src = editing ? t : (prefill || seed || {});
+  const heading = editing ? 'Edit to-do' : (prefill ? 'Try again — new to-do' : 'New to-do');
+  const u = !!src.urgent, i = !!src.important;
+  modal.innerHTML = `
+    <h3>${heading}</h3>
+    <label>Title</label><input id="t_title" value="${src.title ? escapeAttr(src.title) : ''}" placeholder="e.g. Reply to email" />
+    <label>Urgency</label>
+    <div class="seg"><button type="button" id="t_urg1" class="${u ? 'on' : ''}">Urgent ×2</button><button type="button" id="t_urg0" class="${!u ? 'on' : ''}">Not urgent ×1</button></div>
+    <label>Importance</label>
+    <div class="seg"><button type="button" id="t_imp1" class="${i ? 'on' : ''}">Important ×3</button><button type="button" id="t_imp0" class="${!i ? 'on' : ''}">Not important ×1</button></div>
+    <div style="color:var(--muted);font-size:12px;margin-top:6px">Worth <b id="t_pts" style="color:var(--text)"></b> points.</div>
+    <label>End date (optional)</label><input id="t_end" type="date" value="${src.endDate ? src.endDate : ''}" />
+    <label>Notes (optional)</label><textarea id="t_notes">${src.notes ? escapeHtml(src.notes) : ''}</textarea>
+    ${editing ? `<div class="actions" style="justify-content:flex-start;border-top:1px solid #0006;padding-top:12px;margin-top:14px;">
+      <button id="t_done" class="primary" style="background:#1f8a4c">✓ Mark as done</button>
+      <button id="t_miss" class="danger">✗ Mark as missed</button>
+    </div>` : ''}
+    <div class="actions">
+      ${editing ? '<button id="t_del" class="danger">Delete</button>' : ''}
+      <button id="t_cancel">Cancel</button>
+      <button id="t_ok" class="primary">${editing ? 'Save' : 'Create'}</button>
+    </div>`;
+  scrim.classList.add('show');
+  let urg = u, imp = i;
+  const refresh = () => {
+    modal.querySelector('#t_urg1').classList.toggle('on', urg);
+    modal.querySelector('#t_urg0').classList.toggle('on', !urg);
+    modal.querySelector('#t_imp1').classList.toggle('on', imp);
+    modal.querySelector('#t_imp0').classList.toggle('on', !imp);
+    modal.querySelector('#t_pts').textContent = '×' + ((urg ? 2 : 1) * (imp ? 3 : 1));
+  };
+  refresh();
+  modal.querySelector('#t_urg1').onclick = () => { urg = true; refresh(); };
+  modal.querySelector('#t_urg0').onclick = () => { urg = false; refresh(); };
+  modal.querySelector('#t_imp1').onclick = () => { imp = true; refresh(); };
+  modal.querySelector('#t_imp0').onclick = () => { imp = false; refresh(); };
+  modal.querySelector('#t_cancel').onclick = closeModal;
+  const del = modal.querySelector('#t_del');
+  if (del) del.onclick = () => { closeModal(); confirmDeleteTodo(t); };
+  const done = modal.querySelector('#t_done');
+  if (done) done.onclick = () => confirmResolveTodo(t, 'hit');
+  const miss = modal.querySelector('#t_miss');
+  if (miss) miss.onclick = () => confirmResolveTodo(t, 'missed');
+  modal.querySelector('#t_ok').onclick = () => {
+    const title = modal.querySelector('#t_title').value.trim() || 'Untitled';
+    const endDate = modal.querySelector('#t_end').value || null;
+    const notes = modal.querySelector('#t_notes').value;
+    if (editing) { Object.assign(t, { title, urgent: urg, important: imp, endDate, notes }); }
+    else { state.todos.push({ id: uid(), title, urgent: urg, important: imp, endDate, notes, done: false, status: 'active' }); }
+    save(); renderTodos(); closeModal();
+  };
+}
+
+function confirmResolveTodo(t, outcome) {
+  const w = todoWeight(t);
+  const isHit = outcome === 'hit';
+  modal.innerHTML = `<h3>Mark to-do as ${isHit ? 'done' : 'missed'}?</h3>
+    <p style="color:var(--muted)">“${escapeHtml(t.title)}” will be archived as a ${isHit ? 'hit' : 'miss'} (${isHit ? '+' : '−'}${w} on the chart).</p>
+    <div class="actions"><button id="f_cancel">Cancel</button>
+      <button id="f_ok" class="${isHit ? 'primary' : 'danger'}" ${isHit ? 'style="background:#1f8a4c"' : ''}>Mark ${isHit ? 'done' : 'missed'}</button></div>`;
+  modal.querySelector('#f_cancel').onclick = () => openTodoDialog(t);
+  modal.querySelector('#f_ok').onclick = () => {
+    t.status = outcome; t.resolvedOn = toISO(TODAY); t.weight = w; if (isHit) t.done = true;
+    save(); renderTodos(); closeModal();
+  };
+}
+
+function confirmDeleteTodo(t) {
+  modal.innerHTML = `<h3>Delete to-do?</h3>
+    <p style="color:var(--muted)">“${escapeHtml(t.title)}” will be removed. This can't be undone.</p>
+    <div class="actions"><button id="f_cancel">Cancel</button><button id="f_ok" class="danger">Delete</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#f_cancel').onclick = closeModal;
+  modal.querySelector('#f_ok').onclick = () => { state.todos = state.todos.filter(x => x.id !== t.id); save(); renderTodos(); closeModal(); };
+}
+
+function openTodoChart() {
+  applyTodoAutoMiss();
+  const st = todoStats();
+  const toggle = `<div class="chart-toggle">
+      <button id="tc_chart" class="${todoChartMode === 'chart' ? 'active' : ''}">Chart</button>
+      <button id="tc_arch" class="${todoChartMode === 'archive' ? 'active' : ''}">Archive</button></div>`;
+  const statsRow = `<div class="chart-stats">
+      <span>Total <b>${st.total}</b></span>
+      <span>Hits <b style="color:#7fe0a0">${st.hits}</b></span>
+      <span>Missed <b style="color:#e98ba0">${st.misses}</b></span>
+      <span>Success <b>${st.successPct}%</b></span></div>`;
+  modal.innerHTML = `<h3>To-do progress</h3>${toggle}${statsRow}<div id="tc_body"></div>
+    <div class="actions"><button id="tc_close" class="primary">Close</button></div>`;
+  scrim.classList.add('show');
+  modal.querySelector('#tc_close').onclick = closeModal;
+  modal.querySelector('#tc_chart').onclick = () => { todoChartMode = 'chart'; openTodoChart(); };
+  modal.querySelector('#tc_arch').onclick = () => { todoChartMode = 'archive'; openTodoChart(); };
+  const tb = modal.querySelector('#tc_body');
+  if (todoChartMode === 'chart') tb.appendChild(buildScoreChartFrom(todoScoreSeries(), TODO_COLOR));
+  else tb.appendChild(buildTodoArchiveList());
+}
+
+function buildTodoArchiveList() {
+  const wrap = document.createElement('div');
+  const resolved = state.todos.filter(t => t.status === 'hit' || t.status === 'missed')
+    .slice().sort((a, b) => a.resolvedOn < b.resolvedOn ? 1 : -1);
+  if (!resolved.length) { wrap.className = 'goal-empty'; wrap.textContent = 'No archived to-dos yet.'; return wrap; }
+  for (const t of resolved) {
+    const w = t.weight != null ? t.weight : todoWeight(t);
+    const row = document.createElement('div');
+    row.className = 'arch-item';
+    row.innerHTML = `
+      <span class="tag ${t.status}">${t.status === 'hit' ? '+' : '−'}${w}</span>
+      <span class="at"><b>${escapeHtml(t.title)}</b> <span class="adate">· ${fmtDMY(t.resolvedOn)}</span></span>
+      ${t.status === 'missed' ? '<button class="gmiss" data-retry>Try again</button>' : ''}`;
+    const retry = row.querySelector('[data-retry]');
+    if (retry) retry.onclick = () => { closeModal(); openTodoDialog(null, null, { title: t.title, urgent: t.urgent, important: t.important, endDate: t.endDate || null, notes: t.notes || '' }); };
     wrap.appendChild(row);
   }
   return wrap;
@@ -1663,11 +1922,14 @@ function setView(v) {
   currentView = v;
   document.body.classList.toggle('calendar', v === 'calendar');
   document.body.classList.toggle('goals', v === 'goals');
+  document.body.classList.toggle('todos', v === 'todos');
   document.getElementById('nav_timeline').classList.toggle('active', v === 'timeline');
   document.getElementById('nav_calendar').classList.toggle('active', v === 'calendar');
   document.getElementById('nav_goals').classList.toggle('active', v === 'goals');
+  document.getElementById('nav_todos').classList.toggle('active', v === 'todos');
   if (v === 'calendar') { calAnchor = clampMonthAnchor(calAnchor); renderCalendar(); }
   else if (v === 'goals') { renderGoals(); }
+  else if (v === 'todos') { renderTodos(); }
   else renderAll();
 }
 
@@ -1908,8 +2170,10 @@ drawerBackdrop.onclick = closeDrawer;
 document.getElementById('nav_timeline').onclick = () => { setView('timeline'); closeDrawer(); };
 document.getElementById('nav_calendar').onclick = () => { setView('calendar'); closeDrawer(); };
 document.getElementById('nav_goals').onclick = () => { setView('goals'); closeDrawer(); };
+document.getElementById('nav_todos').onclick = () => { setView('todos'); closeDrawer(); };
 document.getElementById('nav_cats').onclick = () => { closeDrawer(); openCategoryManager(); };
 document.getElementById('goalChartBtn').onclick = () => openGoalChart();
+document.getElementById('todoChartBtn').onclick = () => openTodoChart();
 document.getElementById('nav_fit').onclick = () => { closeDrawer(); setView('timeline'); fitToStart(); };
 
 /* ---- floating add button (timeline) ---- */
