@@ -588,6 +588,10 @@ async function loadState() {
 }
 // backfill newer fields onto any previously-saved state (graceful migration)
 function migrateState() {
+  // monthCount must be a positive integer, else the axis can't render and the
+  // "+" button does monthCount++ on undefined -> NaN (can't ever add a month).
+  if (!Number.isFinite(state.monthCount) || state.monthCount < 1) state.monthCount = 5;
+  if (!Array.isArray(state.categories) || !state.categories.length) state.categories = DEFAULT_CATEGORIES.map(c => ({ ...c }));
   if (!Array.isArray(state.events)) state.events = [];
   if (!Array.isArray(state.ranges)) state.ranges = [];
   if (!Array.isArray(state.tasks)) state.tasks = [];
@@ -721,7 +725,7 @@ function renderAxis() {
   add.style.left = (endX + 14) + 'px';
   add.style.top = (AXIS_Y - 15) + 'px';
   add.onpointerdown = e => e.stopPropagation();
-  add.onclick = () => { state.monthCount++; save(); renderAll(); };
+  add.onclick = () => { if (!Number.isFinite(state.monthCount) || state.monthCount < 1) state.monthCount = 1; else state.monthCount++; save(); renderAll(); };
   nodes.appendChild(add);
   // "−" remove last month (only when more than 1 month, below the + so they don't overlap)
   if (state.monthCount > 1) {
