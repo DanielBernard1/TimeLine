@@ -51,9 +51,23 @@ eq('ML progress = 0.4', progress(tree.children[0]), 0.4);
 eq('leaf done -> 1', progress({id:'x',title:'x',done:true}), 1);
 eq('leaf not done -> 0', progress({id:'x',title:'x',done:false}), 0);
 
-// total across a forest
+// total across a forest (by leaves — used by per-parent bars)
 const forest = [tree, { id:'sport', title:'Sport', children:[{id:'run',title:'Run',done:true}] }];
 eq('forest total 3/6', totalCounts(forest), {done:3,total:6});
+
+// MAIN bar: counts whole top-level tasks (0 until a root is 100%).
+function mainBar(roots) {
+  let completed = 0;
+  for (const n of roots) { const c = leafCounts(n); if (c.total > 0 && c.done === c.total) completed++; }
+  return { completed, total: roots.length };
+}
+// Uni is 2/5 (not complete) -> 0; Sport's only leaf is done -> complete
+eq('main bar 1/2 (Sport done, Uni partial)', mainBar(forest), {completed:1, total:2});
+// complete Uni fully -> 2/2
+const uniDone = JSON.parse(JSON.stringify(tree));
+uniDone.children[0].children[0].children.forEach(l=>l.done=true); // all lectures
+uniDone.children[0].children[1].done = true;                       // exam
+eq('main bar 2/2 when both roots complete', mainBar([uniDone, forest[1]]), {completed:2, total:2});
 
 // parent "done" when all leaves done
 const allDone = { id:'p', title:'p', children:[{id:'a',done:true},{id:'b',done:true}] };

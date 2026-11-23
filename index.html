@@ -1783,12 +1783,15 @@ function renderTaskList() {
     e.textContent = 'No tasks yet — tap + to add one.'; body.appendChild(e);
   }
   for (const node of state.tasklist) body.appendChild(tlRenderNode(node));
-  // total bar
-  let done = 0, total = 0;
-  for (const n of state.tasklist) { const c = tlLeafCounts(n); done += c.done; total += c.total; }
-  const pct = total ? Math.round(done / total * 100) : 0;
+  // Main bar: counts WHOLE top-level tasks — only advances when a top-level
+  // task is 100% complete (all its leaves done). Inner bars stay gradual.
+  const roots = state.tasklist;
+  let completed = 0;
+  for (const n of roots) { const c = tlLeafCounts(n); if (c.total > 0 && c.done === c.total) completed++; }
+  const totalRoots = roots.length;
+  const pct = totalRoots ? Math.round(completed / totalRoots * 100) : 0;
   document.getElementById('tl_totalfill').style.width = pct + '%';
-  document.getElementById('tl_totaltxt').textContent = `${done}/${total} · ${pct}%`;
+  document.getElementById('tl_totaltxt').textContent = `${completed}/${totalRoots} · ${pct}%`;
 }
 
 function tlRenderNode(node) {
