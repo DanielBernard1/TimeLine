@@ -647,13 +647,41 @@ function migrateState() {
   if (!Array.isArray(state.todos)) state.todos = [];
   for (const t of state.todos) { if (!t.status) t.status = 'active'; }
   if (!Array.isArray(state.tasklist)) state.tasklist = [];
+  if (!state.sectionTimes || typeof state.sectionTimes !== 'object') state.sectionTimes = {};
   for (const e of state.events) if (e.repeat == null) e.repeat = 'none';
   for (const r of state.ranges) if (r.repeat == null) r.repeat = 'none';
   for (const t of state.tasks) if (t.repeat == null) t.repeat = 'none';
 }
 let saveTimer = null;
+// The independently-synced sections. Each gets its own timestamp so that a
+// device being "newer overall" can never wipe a section another device edited
+// more recently. The grouping below is the unit of merge.
+const SECTIONS = {
+  timeline:  s => ({ monthCount: s.monthCount, events: s.events, ranges: s.ranges, cycle: s.cycle }),
+  calendar:  s => ({ tasks: s.tasks }),
+  categories:s => ({ categories: s.categories }),
+  goals:     s => ({ goals: s.goals }),
+  todos:     s => ({ todos: s.todos }),
+  tasklist:  s => ({ tasklist: s.tasklist }),
+};
+function sectionFingerprint(s, name) { return JSON.stringify(SECTIONS[name](s)); }
+let _lastFingerprints = null;
+
 function save() {
-  state.updatedAt = new Date().toISOString(); // drives sync last-write-wins
+  const now = new Date().toISOString();
+  state.updatedAt = now;
+  if (!state.sectionTimes) state.sectionTimes = {};
+  // bump the timestamp of any section whose content changed since the last save
+  if (_lastFingerprints) {
+    for (const name of Object.keys(SECTIONS)) {
+      const fp = sectionFingerprint(state, name);
+      if (fp !== _lastFingerprints[name]) { state.sectionTimes[name] = now; _lastFingerprints[name] = fp; }
+    }
+  } else {
+    // first save this session: stamp everything and remember fingerprints
+    _lastFingerprints = {};
+    for (const name of Object.keys(SECTIONS)) { state.sectionTimes[name] = state.sectionTimes[name] || now; _lastFingerprints[name] = sectionFingerprint(state, name); }
+  }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
@@ -2482,15 +2510,65 @@ async function restoreSnapshot(statusEl) {
   if (statusEl){statusEl.textContent='Reverted to the pre-sync data. ✓';statusEl.style.color='#7fe0a0';}
 }
 
-async function applyPull(remote, statusEl) {
-  await snapshotLocal(); // safeguard 3: snapshot before overwriting
+// Per-section merge: for each section, keep whichever side's sectionTimes entry
+// is newer. Missing section times fall back to the blob updatedAt, so this also
+// works against old cloud rows. Returns { merged, changedLocal, changedRemote }.
+function mergeStates(local, remote) {
+  const lTimes = local.sectionTimes || {}, rTimes = (remote && remote.sectionTimes) || {};
+  const lFallback = local.updatedAt || '', rFallback = (remote && remote.updatedAt) || '';
+  const merged = JSON.parse(JSON.stringify(local));
+  merged.sectionTimes = { ...lTimes };
+  let changedLocal = false, changedRemote = false;
+  for (const name of Object.keys(SECTIONS)) {
+    const lt = lTimes[name] || lFallback;
+    const rt = rTimes[name] || rFallback;
+    if (remote && rt > lt) {
+      // remote section is newer -> take it into merged (local gains it)
+      Object.assign(merged, SECTIONS[name](remote));
+      merged.sectionTimes[name] = rt;
+      changedLocal = true;
+    } else if (lt > rt) {
+      // local section is newer -> remote will need our copy on push
+      changedRemote = true;
+    }
+  }
+  merged.updatedAt = new Date().toISOString();
+  return { merged, changedLocal, changedRemote };
+}
+
+async function applyMerged(merged, statusEl, note) {
+  await snapshotLocal(); // snapshot before replacing local, for undo
+  state = merged; migrateState();
+  _lastFingerprints = null; // force re-fingerprint on next save
+  try { const db = await openDB(); db.transaction(STORE, 'readwrite').objectStore(STORE).put(state, KEY); } catch (e) { console.warn(e); }
+  renderAll();
+  if (currentView === 'goals') renderGoals();
+  if (currentView === 'todos') renderTodos();
+  if (currentView === 'tasklist') renderTaskList();
+  if (statusEl) {
+    statusEl.innerHTML = (note || 'Synced. ✓') + ' ';
+    const undo = document.createElement('button');
+    undo.textContent = 'Undo'; undo.style.cssText = 'padding:3px 8px;font-size:12px;margin-left:6px;';
+    undo.onclick = () => restoreSnapshot(statusEl);
+    statusEl.style.color = '#7fe0a0'; statusEl.appendChild(undo);
+  }
+}
+
+// Explicit "Pull from cloud ↓": deliberately replace local with the cloud copy
+// (snapshots first so Undo works). Used only by the manual Pull button.
+async function applyRemoteOverwrite(remote, statusEl) {
+  await snapshotLocal();
   const incoming = remote.data || {};
   state = incoming; migrateState();
-  state.updatedAt = remote.updated_at; // keep the server's timestamp
+  state.updatedAt = remote.updated_at;
+  _lastFingerprints = null;
   try { const db = await openDB(); db.transaction(STORE, 'readwrite').objectStore(STORE).put(state, KEY); } catch (e) { console.warn(e); }
-  renderAll(); if (currentView === 'goals') renderGoals(); if (currentView === 'todos') renderTodos();
+  renderAll();
+  if (currentView === 'goals') renderGoals();
+  if (currentView === 'todos') renderTodos();
+  if (currentView === 'tasklist') renderTaskList();
   if (statusEl) {
-    statusEl.innerHTML = 'Pulled newer data from the cloud. ✓ ';
+    statusEl.innerHTML = 'Pulled the cloud copy. ✓ ';
     const undo = document.createElement('button');
     undo.textContent = 'Undo'; undo.style.cssText = 'padding:3px 8px;font-size:12px;margin-left:6px;';
     undo.onclick = () => restoreSnapshot(statusEl);
@@ -2504,65 +2582,34 @@ async function doSync(statusEl) {
   setMsg('Syncing…');
   try {
     const remote = await supabaseGet();
-    const localTime = state.updatedAt || '';
-    const remoteTime = remote ? remote.updated_at : '';
+    const remoteData = remote ? (remote.data || {}) : null;
+    if (remoteData && remote.updated_at && !remoteData.updatedAt) remoteData.updatedAt = remote.updated_at;
 
-    // No remote, or local is newer -> push.
-    if (!remote || localTime > remoteTime) { await supabasePut(state); setMsg('Pushed local data to the cloud. ✓'); return; }
+    // Per-section merge: each section takes whichever side is newer. This can
+    // never wipe a section this device edited more recently than the cloud did.
+    const { merged, changedLocal, changedRemote } = mergeStates(state, remoteData);
 
-    if (remoteTime > localTime) {
-      const remoteReal = hasRealData(remote.data);
-      const localReal = hasRealData(state);
-      // Safeguard 1: never let an empty/seed cloud copy overwrite real local data.
-      if (!remoteReal && localReal) {
-        setMsg('Cloud copy is empty but this device has data — skipped the overwrite. Tap "Push to cloud" to upload this device instead.', true);
-        return;
-      }
-      // Safeguard 2: confirm before replacing non-empty local data.
-      if (localReal) {
-        confirmPull(remote, localTime, remoteTime, statusEl);
-        return;
-      }
-      // local is empty -> safe to pull without asking
-      await applyPull(remote, statusEl);
-      return;
+    if (changedLocal) await applyMerged(merged, statusEl, 'Merged cloud changes in. ✓');
+    else state = merged; // local already had the newest of everything
+
+    // push the merged result up so the cloud holds the union of newest sections
+    if (changedRemote || !remote || changedLocal) {
+      try { const db = await openDB(); db.transaction(STORE, 'readwrite').objectStore(STORE).put(state, KEY); } catch (e) {}
+      await supabasePut(state);
+      if (!changedLocal) setMsg(changedRemote || !remote ? 'Synced — pushed newest sections to the cloud. ✓' : 'Already in sync. ✓');
+    } else if (!changedLocal) {
+      setMsg('Already in sync. ✓');
     }
-    setMsg('Already in sync. ✓');
   } catch (e) {
     setMsg('Sync failed: ' + e.message + ' (check URL/key and connection).', true);
   }
-}
-
-function confirmPull(remote, localTime, remoteTime, statusEl) {
-  const fmt = t => { try { return new Date(t).toLocaleString(); } catch { return t || '—'; } };
-  modal.innerHTML = `<h3>Replace this device's data?</h3>
-    <p style="color:var(--muted);font-size:13px">The cloud copy is newer. Pulling will <b>overwrite this device</b> with the cloud data. A snapshot is saved so you can undo.</p>
-    <div style="font-size:13px;margin:10px 0;line-height:1.7">
-      ↓ Cloud (newer): <b>${fmt(remoteTime)}</b><br>
-      ● This device: <b>${fmt(localTime)}</b>
-    </div>
-    <div class="actions">
-      <button id="cp_push" class="danger" title="Upload this device instead">Push this device ↑</button>
-      <button id="cp_cancel">Cancel</button>
-      <button id="cp_pull" class="primary">Pull &amp; overwrite ↓</button>
-    </div>`;
-  scrim.classList.add('show');
-  modal.querySelector('#cp_cancel').onclick = () => { closeModal(); openSyncSettings(); };
-  modal.querySelector('#cp_pull').onclick = async () => { closeModal(); openSyncSettings(); await applyPull(remote, document.querySelector('#s_status')); };
-  modal.querySelector('#cp_push').onclick = async () => {
-    closeModal(); openSyncSettings();
-    const el = document.querySelector('#s_status');
-    try { state.updatedAt = new Date().toISOString(); await supabasePut(state); save();
-      if (el){el.textContent='Pushed this device to the cloud. ✓';el.style.color='#7fe0a0';}
-    } catch (e) { if (el){el.textContent='Push failed: '+e.message;el.style.color='#e98ba0';} }
-  };
 }
 
 function openSyncSettings() {
   const base = normalizeSupabaseBase(settings.supabaseUrl);
   modal.innerHTML = `
     <h3>Sync &amp; backup</h3>
-    <p style="color:var(--muted);font-size:13px">Sync your data across devices via Supabase (whole-dataset, newer wins). Enter the same URL + key on each device.</p>
+    <p style="color:var(--muted);font-size:13px">Sync across devices via Supabase. Each section (timeline, calendar, goals, to-do, task list) merges independently — the newer edit of each wins, so one device can't wipe a section you changed on another. Enter the same URL + key on each device.</p>
     <label>Supabase project URL</label>
     <input id="s_url" placeholder="https://xxxx.supabase.co" value="${escapeAttr(settings.supabaseUrl || '')}" />
     <label>Supabase anon key</label>
@@ -2614,7 +2661,7 @@ function openSyncSettings() {
     try {
       const remote = await supabaseGet();
       if (!remote) { statusEl.textContent = 'Nothing in the cloud yet.'; statusEl.style.color = '#e98ba0'; return; }
-      await applyPull(remote, statusEl);
+      await applyRemoteOverwrite(remote, statusEl);
     } catch (e) { statusEl.textContent = 'Pull failed: ' + e.message; statusEl.style.color = '#e98ba0'; }
   };
   modal.querySelector('#s_export').onclick = () => exportBackup();

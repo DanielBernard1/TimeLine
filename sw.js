@@ -1,7 +1,7 @@
 /* Service worker for the Timeline PWA.
    Precaches the app shell so it launches and runs fully offline.
    Bump CACHE on each release to roll the cache over. */
-const CACHE = 'timeline-v20';
+const CACHE = 'timeline-v21';
 const ASSETS = [
   '.',
   'index.html',
